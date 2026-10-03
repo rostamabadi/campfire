@@ -12,7 +12,7 @@ import pytest
 
 from builders import CHART, account, allow_a_subtype_that_no_section_uses, credit, debit, entry, ledger_data
 from ledger import load_ledger, parse_ledger
-from statement import ControlTotalError, income_statement
+from statement import ControlTotalError, income_statement, posted_date_span
 
 LEDGER_PATH = Path(__file__).parent.parent / "ledger.json"
 
@@ -379,6 +379,33 @@ def test_revenue_lists_operating_revenue_first_then_contra_each_by_account_numbe
     statement = statement_of(accounts=accounts)
 
     assert [line.account for line in statement.revenue.lines] == ["4000", "4200", "4050"]
+
+
+def test_account_numbers_of_different_lengths_are_listed_in_number_order():
+    accounts = CHART + [account("10000", "Five Digits", "expense", "operating_expense")]
+
+    statement = statement_of(accounts=accounts)
+
+    assert [line.account for line in statement.operating_expenses.lines] == ["6000", "6300", "10000"]
+
+
+def test_posted_date_span_of_the_real_ledger(real_ledger):
+    # JE-001 is the first posted entry and JE-024 the last.
+    assert posted_date_span(real_ledger) == (day("2025-12-15"), day("2026-04-01"))
+
+
+def test_posted_date_span_ignores_drafts_and_voids():
+    ledger = parse_ledger(ledger_data(
+        entry("JE-1", "2026-01-01", debit("6000", "5.00"), credit("2000", "5.00"), status="draft"),
+        entry("JE-2", "2026-02-10", debit("1100", "5.00"), credit("4000", "5.00")),
+        entry("JE-3", "2026-03-20", debit("1100", "5.00"), credit("4000", "5.00"), status="void"),
+    ))
+
+    assert posted_date_span(ledger) == (day("2026-02-10"), day("2026-02-10"))
+
+
+def test_posted_date_span_of_a_ledger_with_nothing_posted():
+    assert posted_date_span(parse_ledger(ledger_data())) is None
 
 
 def test_amounts_are_exact_decimals():

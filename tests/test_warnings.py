@@ -28,6 +28,8 @@ def test_q1_2026_reports_the_draft_bonus_accrual_and_nothing_else():
     assert warning["code"] == "draft_not_included"
     assert warning["entry_ids"] == ["JE-019"]
     assert warning["date"] == "2026-03-15"
+    assert warning["memo"] == "Q1 bonus accrual (pending approval)"
+    assert warning["amount"] == "5000.00"
     assert warning["message"] == (
         "JE-019 (2026-03-15, Q1 bonus accrual (pending approval), 5,000.00) is a draft "
         "and is not included in the totals."
@@ -76,6 +78,23 @@ def test_void_entries_are_not_reported():
     )
 
     assert statement.warnings == []
+
+
+# --- problems in draft and void entries ---
+
+def test_a_problem_in_a_draft_is_reported_on_every_statement_and_changes_no_total():
+    # The draft does not balance. It is dated in March, the statement is for January.
+    statement = statement_of(
+        entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")),
+        entry("JE-2", "2026-03-15", debit("6000", "500.00"), credit("2000", "400.00"), status="draft"),
+        start="2026-01-01",
+        end="2026-01-31",
+    )
+
+    assert [(warning["code"], warning["entry_id"]) for warning in statement.warnings] == [
+        ("unbalanced_entry", "JE-2"),
+    ]
+    assert statement.net_income == D("100.00")
 
 
 # --- possible duplicates ---

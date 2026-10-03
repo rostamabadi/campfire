@@ -54,6 +54,14 @@ class ControlTotalError(Exception):
         self.error = error
 
 
+def posted_date_span(ledger: Ledger) -> tuple[date, date] | None:
+    """The dates of the first and the last posted entry, or None if nothing is posted."""
+    dates = [entry.date for entry in ledger.entries if entry.status == "posted"]
+    if not dates:
+        return None
+    return min(dates), max(dates)
+
+
 def entries_in_range(ledger: Ledger, start: date, end: date, status: str) -> list[Entry]:
     """Entries with the given status dated from start to end, both days included."""
     return [
@@ -88,7 +96,8 @@ def build_section(
     lines = []
     for subtype in subtypes:
         accounts = [account for account in ledger.accounts.values() if account.subtype == subtype]
-        for account in sorted(accounts, key=lambda account: account.number):
+        # Shorter numbers first, so that 6000 comes before 10000. Plain text order would not.
+        for account in sorted(accounts, key=lambda account: (len(account.number), account.number)):
             debits = debit_totals.get(account.number, ZERO)
             credits = credit_totals.get(account.number, ZERO)
             amount = credits - debits if credit_normal else debits - credits
@@ -99,7 +108,10 @@ def build_section(
 
 
 def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
-    """Things a reader should know about the range. Warnings never change the totals."""
+    """Things a reader should know about the range. Warnings never change the totals.
+
+    The statement adds the ledger's own warnings to these: problems in draft and void entries.
+    """
     warnings = []
 
     for entry in entries_in_range(ledger, start, end, "draft"):
@@ -108,6 +120,8 @@ def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
             "code": "draft_not_included",
             "entry_ids": [entry.id],
             "date": entry.date.isoformat(),
+            "memo": entry.memo,
+            "amount": f"{amount:.2f}",
             "message": f"{entry.id} ({entry.date}, {entry.memo}, {amount:,.2f}) is a draft "
                        f"and is not included in the totals.",
         })
@@ -178,5 +192,5 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
         other_income=other_income,
         net_income=net_income,
         balance_sheet_movement=balance_sheet_movement,
-        warnings=find_warnings(ledger, start, end),
+        warnings=ledger.warnings + find_warnings(ledger, start, end),
     )

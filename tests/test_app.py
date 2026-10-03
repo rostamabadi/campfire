@@ -98,6 +98,8 @@ def test_q1_2026_json(client):
                 "code": "draft_not_included",
                 "entry_ids": ["JE-019"],
                 "date": "2026-03-15",
+                "memo": "Q1 bonus accrual (pending approval)",
+                "amount": "5000.00",
                 "message": "JE-019 (2026-03-15, Q1 bonus accrual (pending approval), 5,000.00) is a draft "
                            "and is not included in the totals.",
             }
