@@ -45,6 +45,14 @@ class IncomeStatement:
     warnings: list[dict]
 
 
+class ControlTotalError(Exception):
+    """Net income and the movement in balance-sheet accounts disagree, so one of them is wrong."""
+
+    def __init__(self, error: dict):
+        super().__init__(error["message"])
+        self.error = error
+
+
 def entries_in_range(ledger: Ledger, start: date, end: date, status: str) -> list[Entry]:
     """Entries with the given status dated from start to end, both days included."""
     return [
@@ -141,6 +149,20 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     gross_profit = revenue.total - cost_of_goods_sold.total
     operating_income = gross_profit - operating_expenses.total
     net_income = operating_income + other_income.total
+
+    # The control total. Every entry balances, so the balance-sheet lines of the same entries
+    # must net to the same amount as the income statement. If they do not, an account was
+    # left out, counted twice or given the wrong sign, and no statement is returned.
+    balance_sheet_movement = build_section(
+        ledger, debit_totals, credit_totals, ["balance_sheet"], credit_normal=False
+    )
+    if balance_sheet_movement.total != net_income:
+        raise ControlTotalError({
+            "code": "control_total_mismatch",
+            "message": f"For {start} to {end}, net income is {net_income:,.2f} but the balance-sheet "
+                       f"accounts moved by {balance_sheet_movement.total:,.2f}. These must be equal, "
+                       f"so the statement is not shown.",
+        })
 
     return IncomeStatement(
         company=ledger.company,

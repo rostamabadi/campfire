@@ -6,7 +6,7 @@ from decimal import Decimal as D
 import pytest
 
 from app import accounting, create_app, money
-from builders import credit, debit, entry, ledger_data
+from builders import allow_a_subtype_that_no_section_uses, credit, debit, entry, ledger_data
 
 Q1 = "start=2026-01-01&end=2026-03-31"
 
@@ -191,6 +191,27 @@ def test_an_unreadable_ledger_is_reported(tmp_path):
 
     assert response.status_code == 500
     assert [error["code"] for error in response.get_json()["errors"]] == ["unreadable_ledger"]
+
+
+def test_a_control_total_mismatch_is_an_error_not_a_statement(tmp_path, monkeypatch):
+    accounts = allow_a_subtype_that_no_section_uses(monkeypatch)
+    data = ledger_data(
+        entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")),
+        entry("JE-2", "2026-01-06", debit("7500", "30.00"), credit("1000", "30.00")),
+        accounts=accounts,
+    )
+    path = tmp_path / "ledger.json"
+    path.write_text(json.dumps(data))
+    client = create_app(path).test_client()
+
+    api_response = client.get(f"/income-statement?{Q1}")
+    page_response = client.get(f"/?{Q1}")
+
+    assert api_response.status_code == 500
+    assert [error["code"] for error in api_response.get_json()["errors"]] == ["control_total_mismatch"]
+    assert page_response.status_code == 500
+    assert "net income is 100.00 but the balance-sheet accounts moved by 70.00" in page_response.text
+    assert "Net income" not in page_response.text
 
 
 # --- the page ---

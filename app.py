@@ -6,7 +6,7 @@ from pathlib import Path
 from flask import Flask, render_template, request
 
 from ledger import LedgerError, load_ledger, parse_date
-from statement import IncomeStatement, Section, income_statement
+from statement import ControlTotalError, IncomeStatement, Section, income_statement
 
 LEDGER_PATH = Path(__file__).with_name("ledger.json")
 
@@ -102,7 +102,10 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
         start, end, errors = parse_range(request.args)
         if errors:
             return None, errors, 400
-        return income_statement(ledger, start, end), [], 200
+        try:
+            return income_statement(ledger, start, end), [], 200
+        except ControlTotalError as problem:
+            return None, [problem.error], 500
 
     @app.get("/income-statement")
     def income_statement_api():

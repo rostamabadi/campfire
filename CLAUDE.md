@@ -119,6 +119,12 @@ Every error response has one shape, and reports every problem found, not only th
   misfiled account would drop off the statement, or onto it, without any sign.
 - The checks apply to every entry, whatever its status. A file
   that is missing, not JSON, or missing a field is one `unreadable_ledger` error.
+- **Control total, HTTP 500.** On every request, net income must equal the net movement
+  (debits − credits) in balance-sheet accounts for the same posted entries. Every entry
+  balances, so the two can only differ if the code left an account out, counted it twice or
+  gave it the wrong sign. Then the response is one `control_total_mismatch` error with both
+  figures, and no statement. It does not catch a line in the wrong section, or a wrong date
+  or status filter.
 - Messages are written for an accountant: they name the entry, the accounts and the amounts.
 - The HTML page shows the same messages above the statement, with the same status code.
 - `GET /` with no query string is a first visit: form only, no error.

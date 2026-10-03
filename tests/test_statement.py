@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from builders import CHART, account, credit, debit, entry, ledger_data
+from builders import CHART, account, allow_a_subtype_that_no_section_uses, credit, debit, entry, ledger_data
 from ledger import load_ledger, parse_ledger
-from statement import income_statement
+from statement import ControlTotalError, income_statement
 
 LEDGER_PATH = Path(__file__).parent.parent / "ledger.json"
 
@@ -164,6 +164,24 @@ def test_two_adjacent_ranges_add_up_to_the_whole_range(real_ledger):
         assert first.net_income + second.net_income == whole.net_income, (start, split, end)
         for number, amount in all_amounts(whole).items():
             assert all_amounts(first)[number] + all_amounts(second)[number] == amount, (start, split, end, number)
+
+
+def test_the_control_total_stops_a_statement_that_leaves_an_account_out(monkeypatch):
+    accounts = allow_a_subtype_that_no_section_uses(monkeypatch)
+
+    with pytest.raises(ControlTotalError) as raised:
+        statement_of(
+            entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")),
+            entry("JE-2", "2026-01-06", debit("7500", "30.00"), credit("1000", "30.00")),
+            accounts=accounts,
+        )
+
+    # The statement sees only the 100.00 of sales. The balance sheet side moved by 100.00 - 30.00.
+    assert raised.value.error == {
+        "code": "control_total_mismatch",
+        "message": "For 2026-01-01 to 2026-12-31, net income is 100.00 but the balance-sheet "
+                   "accounts moved by 70.00. These must be equal, so the statement is not shown.",
+    }
 
 
 # --- one small ledger per trap ---
