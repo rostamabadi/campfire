@@ -3,10 +3,11 @@
 from decimal import Decimal
 from pathlib import Path
 
-from flask import Flask, render_template, request
+from flask import Flask, redirect, render_template, request, url_for
+from werkzeug.exceptions import HTTPException
 
 from ledger import LedgerError, load_ledger, parse_date
-from statement import ControlTotalError, IncomeStatement, Section, income_statement
+from statement import ControlTotalError, IncomeStatement, Section, income_statement, posted_date_span
 
 LEDGER_PATH = Path(__file__).with_name("ledger.json")
 
@@ -87,16 +88,19 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
     app.json.sort_keys = False  # keep the statement's order in the JSON
     app.jinja_env.filters["accounting"] = accounting
 
-    # The ledger is read once, at startup. If the data has problems the app still starts,
-    # and every request reports them instead of showing numbers that might be wrong.
-    try:
-        ledger = load_ledger(ledger_path)
-        ledger_errors = []
-    except LedgerError as problem:
-        ledger = None
-        ledger_errors = problem.errors
+    def read_ledger() -> tuple:
+        """Returns (ledger, errors). The file is read on every request, so an edit to it shows
+        up without a restart. It is small. A real system would query a database here.
 
-    def statement_for_request() -> tuple:
+        If the data has blocking problems there is no ledger, and the request reports the
+        problems instead of showing numbers that might be wrong.
+        """
+        try:
+            return load_ledger(ledger_path), []
+        except LedgerError as problem:
+            return None, problem.errors
+
+    def statement_for_request(ledger, ledger_errors) -> tuple:
         """Returns (statement, errors, http_status) for the start and end in the query string."""
         if ledger_errors:
             return None, ledger_errors, 500
@@ -110,17 +114,26 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
 
     @app.get("/income-statement")
     def income_statement_api():
-        statement, errors, status = statement_for_request()
+        ledger, ledger_errors = read_ledger()
+        statement, errors, status = statement_for_request(ledger, ledger_errors)
         if errors:
             return {"errors": errors}, status
         return statement_json(statement)
 
     @app.get("/")
     def income_statement_page():
-        statement, errors, status = None, [], 200
-        # With no query string this is a first visit: show the form, not "date is required".
-        if request.args or ledger_errors:
-            statement, errors, status = statement_for_request()
+        ledger, ledger_errors = read_ledger()
+
+        # With no query string this is a first visit. Go to the whole ledger, from its first
+        # posted entry to its last. If nothing is posted yet, show only the form.
+        if not request.args and not ledger_errors:
+            span = posted_date_span(ledger)
+            if span is None:
+                return render_template("statement.html", statement=None, errors=[], start="", end="")
+            first, last = span
+            return redirect(url_for("income_statement_page", start=first.isoformat(), end=last.isoformat()))
+
+        statement, errors, status = statement_for_request(ledger, ledger_errors)
         page = render_template(
             "statement.html",
             statement=statement,
@@ -129,5 +142,11 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
             end=request.args.get("end", ""),
         )
         return page, status
+
+    @app.errorhandler(HTTPException)
+    def http_error(problem):
+        """Unknown URLs, wrong methods and unexpected failures, in the same shape as every other error."""
+        code = problem.name.lower().replace(" ", "_")  # "Not Found" becomes "not_found"
+        return {"errors": [{"code": code, "message": problem.description}]}, problem.code
 
     return app

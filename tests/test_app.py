@@ -229,14 +229,95 @@ def test_a_control_total_mismatch_is_an_error_not_a_statement(tmp_path, monkeypa
 
 # --- the page ---
 
-def test_first_visit_shows_the_form_and_no_error(client):
+def test_first_visit_goes_to_the_whole_ledger(client):
     response = client.get("/")
 
+    # From the first posted entry, JE-001, to the last, JE-024.
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/?start=2025-12-15&end=2026-04-01"
+
+    page = client.get("/", follow_redirects=True)
+
+    assert page.status_code == 200
+    assert 'value="2025-12-15"' in page.text and 'value="2026-04-01"' in page.text
+    assert "(30,380.14)" in page.text  # 5,000.00 - 44,480.14 + 9,100.00
+    assert "could not be shown" not in page.text
+
+
+def test_first_visit_with_nothing_posted_shows_only_the_form(tmp_path):
+    path = tmp_path / "ledger.json"
+    path.write_text(json.dumps(ledger_data()))
+
+    response = create_app(path).test_client().get("/")
+
     assert response.status_code == 200
-    assert 'name="start"' in response.text
-    assert 'name="end"' in response.text
+    assert 'name="start"' in response.text and 'name="end"' in response.text
     assert "could not be shown" not in response.text
     assert "Net income" not in response.text
+
+
+def test_an_edit_to_the_ledger_file_shows_up_without_a_restart(tmp_path):
+    path = tmp_path / "ledger.json"
+    path.write_text(json.dumps(ledger_data(
+        entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")),
+    )))
+    client = create_app(path).test_client()
+    assert client.get(f"/income-statement?{Q1}").get_json()["net_income"] == "100.00"
+
+    path.write_text(json.dumps(ledger_data(
+        entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")),
+        entry("JE-2", "2026-01-06", debit("1100", "25.50"), credit("4000", "25.50")),
+    )))
+
+    assert client.get(f"/income-statement?{Q1}").get_json()["net_income"] == "125.50"
+
+
+def test_a_problem_in_a_draft_is_shown_as_a_note_and_the_statement_still_appears(tmp_path):
+    path = tmp_path / "ledger.json"
+    path.write_text(json.dumps(ledger_data(
+        entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")),
+        entry("JE-2", "2026-01-06", debit("6000", "500.00"), credit("2000", "400.00"), status="draft"),
+    )))
+    client = create_app(path).test_client()
+
+    api_response = client.get(f"/income-statement?{Q1}")
+    page_response = client.get(f"/?{Q1}")
+
+    assert api_response.status_code == 200
+    assert api_response.get_json()["net_income"] == "100.00"
+    assert [warning["code"] for warning in api_response.get_json()["warnings"]] == ["unbalanced_entry"]
+    assert page_response.status_code == 200
+    assert "JE-2 does not balance: debits 500.00, credits 400.00. This entry is a draft" in page_response.text
+
+
+# --- errors that are not about the statement ---
+
+def test_an_unknown_url_returns_the_json_error_shape(client):
+    response = client.get("/nope")
+
+    assert response.status_code == 404
+    assert [error["code"] for error in response.get_json()["errors"]] == ["not_found"]
+
+
+def test_a_wrong_method_returns_the_json_error_shape(client):
+    response = client.post("/income-statement")
+
+    assert response.status_code == 405
+    assert [error["code"] for error in response.get_json()["errors"]] == ["method_not_allowed"]
+
+
+def test_an_unexpected_failure_returns_the_json_error_shape(client, monkeypatch):
+    def fail(*args):
+        raise RuntimeError("something broke")
+
+    monkeypatch.setattr("app.income_statement", fail)
+
+    response = client.get(f"/income-statement?{Q1}")
+
+    assert response.status_code == 500
+    body = response.get_json()
+    assert [error["code"] for error in body["errors"]] == ["internal_server_error"]
+    assert "something broke" not in response.text  # no internals in the response
 
 
 def test_page_shows_q1_2026_the_way_an_accountant_reads_it(client):
