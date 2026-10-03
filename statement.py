@@ -1,0 +1,123 @@
+"""Build an income statement for a date range from the ledger.
+
+The rules, in one place:
+- Only posted entries count. The date range is inclusive at both ends.
+- An account's section comes from its subtype, never from its type.
+- Revenue and other income lines are credits minus debits.
+  Cost of goods sold and operating expense lines are debits minus credits.
+"""
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+
+from ledger import Entry, Ledger
+
+ZERO = Decimal("0.00")
+
+
+@dataclass(frozen=True)
+class StatementLine:
+    account: str  # account number
+    name: str
+    amount: Decimal
+
+
+@dataclass(frozen=True)
+class Section:
+    lines: list[StatementLine]
+    total: Decimal
+
+
+@dataclass(frozen=True)
+class IncomeStatement:
+    company: str
+    currency: str
+    start: date
+    end: date
+    revenue: Section
+    cost_of_goods_sold: Section
+    gross_profit: Decimal
+    operating_expenses: Section
+    operating_income: Decimal
+    other_income: Section
+    net_income: Decimal
+    warnings: list[dict]
+
+
+def entries_in_range(ledger: Ledger, start: date, end: date, status: str) -> list[Entry]:
+    """Entries with the given status dated from start to end, both days included."""
+    return [
+        entry for entry in ledger.entries
+        if entry.status == status and start <= entry.date <= end
+    ]
+
+
+def account_totals(entries: list[Entry]) -> tuple[dict[str, Decimal], dict[str, Decimal]]:
+    """Total debits and total credits per account number across the given entries."""
+    debit_totals = {}
+    credit_totals = {}
+    for entry in entries:
+        for line in entry.lines:
+            debit_totals[line.account] = debit_totals.get(line.account, ZERO) + line.debit
+            credit_totals[line.account] = credit_totals.get(line.account, ZERO) + line.credit
+    return debit_totals, credit_totals
+
+
+def build_section(
+    ledger: Ledger,
+    debit_totals: dict[str, Decimal],
+    credit_totals: dict[str, Decimal],
+    subtypes: list[str],
+    credit_normal: bool,
+) -> Section:
+    """One section of the statement: a line for every account of the given subtypes, and their total.
+
+    Lines follow the order of `subtypes`, then account number. `credit_normal` sets the sign:
+    True means credits minus debits (income), False means debits minus credits (costs).
+    """
+    lines = []
+    for subtype in subtypes:
+        accounts = [account for account in ledger.accounts.values() if account.subtype == subtype]
+        for account in sorted(accounts, key=lambda account: account.number):
+            debits = debit_totals.get(account.number, ZERO)
+            credits = credit_totals.get(account.number, ZERO)
+            amount = credits - debits if credit_normal else debits - credits
+            lines.append(StatementLine(account=account.number, name=account.name, amount=amount))
+
+    total = sum((line.amount for line in lines), ZERO)
+    return Section(lines=lines, total=total)
+
+
+def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
+    """The income statement for posted entries dated from start to end, both days included."""
+    posted = entries_in_range(ledger, start, end, "posted")
+    debit_totals, credit_totals = account_totals(posted)
+
+    revenue = build_section(
+        ledger, debit_totals, credit_totals, ["operating_revenue", "contra_revenue"], credit_normal=True
+    )
+    cost_of_goods_sold = build_section(ledger, debit_totals, credit_totals, ["cogs"], credit_normal=False)
+    operating_expenses = build_section(
+        ledger, debit_totals, credit_totals, ["operating_expense"], credit_normal=False
+    )
+    other_income = build_section(ledger, debit_totals, credit_totals, ["other_income"], credit_normal=True)
+
+    gross_profit = revenue.total - cost_of_goods_sold.total
+    operating_income = gross_profit - operating_expenses.total
+    net_income = operating_income + other_income.total
+
+    return IncomeStatement(
+        company=ledger.company,
+        currency=ledger.currency,
+        start=start,
+        end=end,
+        revenue=revenue,
+        cost_of_goods_sold=cost_of_goods_sold,
+        gross_profit=gross_profit,
+        operating_expenses=operating_expenses,
+        operating_income=operating_income,
+        other_income=other_income,
+        net_income=net_income,
+        warnings=[],
+    )
