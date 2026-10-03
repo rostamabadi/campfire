@@ -20,9 +20,10 @@
 - **Every income-statement account has a line**, 0.00 when it has no activity.
 - **Money is `Decimal`, read from the strings**, and a string in the JSON. An amount given as
   a JSON number is rejected.
-- **Bad data blocks the statement.** An unbalanced entry, unknown account, invalid amount or
-  date, unknown status, type or subtype, or reused id returns 500 listing every problem, on
-  the page too. A partial statement could be wrong without looking wrong.
+- **Bad data blocks the statement.** An unbalanced entry, an entry with fewer than two lines,
+  unknown account, invalid amount or date, unknown status, type or subtype, or reused id
+  returns 500 listing every problem, on the page too. A partial statement could be wrong
+  without looking wrong.
 - **Type and subtype must agree.** A `revenue` account filed as `balance_sheet` would drop
   off the statement without any sign, so that is an error too.
 - **Possible duplicates are flagged, not removed.** Two posted entries with the same date

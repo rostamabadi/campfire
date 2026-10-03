@@ -174,6 +174,14 @@ def find_line_errors(entry_id: str, lines: list[dict], account_numbers: set[str]
     total_credits = Decimal("0.00")
     amounts_are_valid = True
 
+    if len(lines) < 2:
+        count = "1 line" if len(lines) == 1 else "no lines"
+        errors.append({
+            "code": "too_few_lines",
+            "entry_id": entry_id,
+            "message": f"{entry_id} has {count}. A journal entry needs at least two.",
+        })
+
     for raw in lines:
         account = raw["account"]
         if account not in account_numbers:

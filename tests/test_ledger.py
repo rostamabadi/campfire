@@ -104,9 +104,25 @@ def test_invalid_amount_is_reported_once_without_a_balance_error(bad_amount):
 
 def test_line_with_both_a_debit_and_a_credit():
     both_sides = {"account": "1100", "debit": "100.00", "credit": "100.00"}
-    data = ledger_data(entry("JE-1", "2026-01-05", both_sides))
+    data = ledger_data(
+        entry("JE-1", "2026-01-05", both_sides, debit("1100", "50.00"), credit("4000", "50.00"))
+    )
 
     assert error_codes(data) == ["invalid_line"]
+
+
+def test_an_entry_with_no_lines():
+    errors = find_errors(ledger_data(entry("JE-1", "2026-01-05")))
+
+    assert [error["code"] for error in errors] == ["too_few_lines"]
+    assert errors[0]["message"] == "JE-1 has no lines. A journal entry needs at least two."
+
+
+def test_an_entry_with_one_line_has_too_few_lines_and_cannot_balance():
+    errors = find_errors(ledger_data(entry("JE-1", "2026-01-05", debit("1100", "100.00"))))
+
+    assert [error["code"] for error in errors] == ["too_few_lines", "unbalanced_entry"]
+    assert errors[0]["message"] == "JE-1 has 1 line. A journal entry needs at least two."
 
 
 def test_unknown_status():
