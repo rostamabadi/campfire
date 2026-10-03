@@ -1,0 +1,99 @@
+{
+  "company": "Northwind Coffee Roasters",
+  "currency": "USD",
+  "accounts": [
+    {"number": "1000", "name": "Cash", "type": "asset", "subtype": "balance_sheet", "is_active": true},
+    {"number": "1100", "name": "Accounts Receivable", "type": "asset", "subtype": "balance_sheet", "is_active": true},
+    {"number": "1200", "name": "Inventory", "type": "asset", "subtype": "balance_sheet", "is_active": true},
+    {"number": "2000", "name": "Accounts Payable", "type": "liability", "subtype": "balance_sheet", "is_active": true},
+    {"number": "2100", "name": "Deferred Revenue", "type": "liability", "subtype": "balance_sheet", "is_active": true},
+    {"number": "3000", "name": "Retained Earnings", "type": "equity", "subtype": "balance_sheet", "is_active": true},
+    {"number": "4000", "name": "Product Revenue", "type": "revenue", "subtype": "operating_revenue", "is_active": true},
+    {"number": "4100", "name": "Subscription Revenue", "type": "revenue", "subtype": "operating_revenue", "is_active": true},
+    {"number": "4900", "name": "Sales Returns & Discounts", "type": "revenue", "subtype": "contra_revenue", "is_active": true},
+    {"number": "5000", "name": "Cost of Goods Sold", "type": "expense", "subtype": "cogs", "is_active": true},
+    {"number": "6000", "name": "Salaries", "type": "expense", "subtype": "operating_expense", "is_active": true},
+    {"number": "6100", "name": "Rent", "type": "expense", "subtype": "operating_expense", "is_active": true},
+    {"number": "6200", "name": "Software", "type": "expense", "subtype": "operating_expense", "is_active": true},
+    {"number": "6300", "name": "Marketing (legacy)", "type": "expense", "subtype": "operating_expense", "is_active": false},
+    {"number": "7000", "name": "Interest Income", "type": "revenue", "subtype": "other_income", "is_active": true}
+  ],
+  "journal_entries": [
+    {"id": "JE-001", "date": "2025-12-15", "status": "posted", "memo": "December product sales", "lines": [
+      {"account": "1100", "debit": "5000.00", "credit": "0.00"},
+      {"account": "4000", "debit": "0.00", "credit": "5000.00"}]},
+    {"id": "JE-002", "date": "2026-01-05", "status": "posted", "memo": "January product sales", "lines": [
+      {"account": "1100", "debit": "12450.75", "credit": "0.00"},
+      {"account": "4000", "debit": "0.00", "credit": "12450.75"}]},
+    {"id": "JE-003", "date": "2026-01-05", "status": "posted", "memo": "January cost of goods sold", "lines": [
+      {"account": "5000", "debit": "4980.30", "credit": "0.00"},
+      {"account": "1200", "debit": "0.00", "credit": "4980.30"}]},
+    {"id": "JE-004", "date": "2026-01-10", "status": "posted", "memo": "Annual subscription billed to Acme Cafes", "lines": [
+      {"account": "1100", "debit": "12000.00", "credit": "0.00"},
+      {"account": "2100", "debit": "0.00", "credit": "12000.00"}]},
+    {"id": "JE-005", "date": "2026-01-31", "status": "posted", "memo": "Recognize January subscription revenue", "lines": [
+      {"account": "2100", "debit": "1000.00", "credit": "0.00"},
+      {"account": "4100", "debit": "0.00", "credit": "1000.00"}]},
+    {"id": "JE-006", "date": "2026-01-31", "status": "posted", "memo": "January payroll", "lines": [
+      {"account": "6000", "debit": "18500.00", "credit": "0.00"},
+      {"account": "1000", "debit": "0.00", "credit": "18500.00"}]},
+    {"id": "JE-007", "date": "2026-01-01", "status": "posted", "memo": "January to March rent, expensed when paid", "lines": [
+      {"account": "6100", "debit": "9000.00", "credit": "0.00"},
+      {"account": "1000", "debit": "0.00", "credit": "9000.00"}]},
+    {"id": "JE-008", "date": "2026-01-20", "status": "posted", "memo": "Coffee Expo booth", "lines": [
+      {"account": "6300", "debit": "2500.10", "credit": "0.00"},
+      {"account": "2000", "debit": "0.00", "credit": "2500.10"}]},
+    {"id": "JE-009", "date": "2026-02-03", "status": "void", "memo": "February product sales (entered twice)", "lines": [
+      {"account": "1100", "debit": "8200.00", "credit": "0.00"},
+      {"account": "4000", "debit": "0.00", "credit": "8200.00"}]},
+    {"id": "JE-010", "date": "2026-02-03", "status": "posted", "memo": "February product sales", "lines": [
+      {"account": "1100", "debit": "8200.00", "credit": "0.00"},
+      {"account": "4000", "debit": "0.00", "credit": "8200.00"}]},
+    {"id": "JE-011", "date": "2026-02-03", "status": "posted", "memo": "February cost of goods sold", "lines": [
+      {"account": "5000", "debit": "3280.00", "credit": "0.00"},
+      {"account": "1200", "debit": "0.00", "credit": "3280.00"}]},
+    {"id": "JE-012", "date": "2026-02-14", "status": "posted", "memo": "Returned order, Blue Door Cafe", "lines": [
+      {"account": "4900", "debit": "650.25", "credit": "0.00"},
+      {"account": "1100", "debit": "0.00", "credit": "650.25"}]},
+    {"id": "JE-013", "date": "2026-02-15", "status": "posted", "memo": "Payment received for January sales", "lines": [
+      {"account": "1000", "debit": "12450.75", "credit": "0.00"},
+      {"account": "1100", "debit": "0.00", "credit": "12450.75"}]},
+    {"id": "JE-014", "date": "2026-02-28", "status": "posted", "memo": "Recognize February subscription revenue", "lines": [
+      {"account": "2100", "debit": "1000.00", "credit": "0.00"},
+      {"account": "4100", "debit": "0.00", "credit": "1000.00"}]},
+    {"id": "JE-015", "date": "2026-02-28", "status": "posted", "memo": "February payroll", "lines": [
+      {"account": "6000", "debit": "18500.00", "credit": "0.00"},
+      {"account": "1000", "debit": "0.00", "credit": "18500.00"}]},
+    {"id": "JE-016", "date": "2026-03-02", "status": "posted", "memo": "March product sales, 1% volume discount", "lines": [
+      {"account": "1100", "debit": "14850.00", "credit": "0.00"},
+      {"account": "4900", "debit": "150.00", "credit": "0.00"},
+      {"account": "4000", "debit": "0.00", "credit": "15000.00"}]},
+    {"id": "JE-017", "date": "2026-03-02", "status": "posted", "memo": "March cost of goods sold", "lines": [
+      {"account": "5000", "debit": "6012.45", "credit": "0.00"},
+      {"account": "1200", "debit": "0.00", "credit": "6012.45"}]},
+    {"id": "JE-018", "date": "2026-03-10", "status": "posted", "memo": "Software subscriptions", "lines": [
+      {"account": "6200", "debit": "1199.97", "credit": "0.00"},
+      {"account": "2000", "debit": "0.00", "credit": "1199.97"}]},
+    {"id": "JE-019", "date": "2026-03-15", "status": "draft", "memo": "Q1 bonus accrual (pending approval)", "lines": [
+      {"account": "6000", "debit": "5000.00", "credit": "0.00"},
+      {"account": "2000", "debit": "0.00", "credit": "5000.00"}]},
+    {"id": "JE-020", "date": "2026-03-20", "status": "posted", "memo": "Credit from software vendor for overbilling", "lines": [
+      {"account": "2000", "debit": "100.00", "credit": "0.00"},
+      {"account": "6200", "debit": "0.00", "credit": "100.00"}]},
+    {"id": "JE-021", "date": "2026-03-31", "status": "posted", "memo": "Recognize March subscription revenue", "lines": [
+      {"account": "2100", "debit": "1000.00", "credit": "0.00"},
+      {"account": "4100", "debit": "0.00", "credit": "1000.00"}]},
+    {"id": "JE-022", "date": "2026-03-31", "status": "posted", "memo": "March payroll", "lines": [
+      {"account": "6000", "debit": "18500.00", "credit": "0.00"},
+      {"account": "1000", "debit": "0.00", "credit": "18500.00"}]},
+    {"id": "JE-023", "date": "2026-03-31", "status": "posted", "memo": "Interest earned, March", "lines": [
+      {"account": "1000", "debit": "42.18", "credit": "0.00"},
+      {"account": "7000", "debit": "0.00", "credit": "42.18"}]},
+    {"id": "JE-024", "date": "2026-04-01", "status": "posted", "memo": "April product sales", "lines": [
+      {"account": "1100", "debit": "9100.00", "credit": "0.00"},
+      {"account": "4000", "debit": "0.00", "credit": "9100.00"}]},
+    {"id": "JE-025", "date": "2026-03-18", "status": "void", "memo": "Payment received from Blue Door Cafe (check returned unsigned)", "lines": [
+      {"account": "1000", "debit": "3200.00", "credit": "0.00"},
+      {"account": "1100", "debit": "0.00", "credit": "3200.00"}]}
+  ]
+}
