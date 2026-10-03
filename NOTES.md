@@ -21,8 +21,10 @@
 - **Money is `Decimal`, read from the strings**, and a string in the JSON. An amount given as
   a JSON number is rejected.
 - **Bad data blocks the statement.** An unbalanced entry, unknown account, invalid amount or
-  date, unknown status or subtype, or reused id returns 500 listing every problem, on the
-  page too. A partial statement could be wrong without looking wrong.
+  date, unknown status, type or subtype, or reused id returns 500 listing every problem, on
+  the page too. A partial statement could be wrong without looking wrong.
+- **Type and subtype must agree.** A `revenue` account filed as `balance_sheet` would drop
+  off the statement without any sign, so that is an error too.
 - **Possible duplicates are flagged, not removed.** Two posted entries with the same date
   and identical lines stay in the totals, since it cannot be proven from the data. JE-009
   and JE-010 raise nothing because JE-009 is already void.
@@ -55,4 +57,3 @@ Claude Code helped read the brief, list the traps in the data, and write the cod
 - Better duplicate detection: near matches on nearby dates or with lines split differently.
 - Comparative periods, and drill-down from a line to its entries.
 - A balance sheet and trial balance from the same per-account totals.
-- Check that type and subtype agree, such as an asset with a `cogs` subtype.

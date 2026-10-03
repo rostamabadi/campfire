@@ -18,6 +18,15 @@ SUBTYPES = (
     "other_income",
     "balance_sheet",
 )
+# The subtypes each account type may have. Anything else would put an account on the wrong
+# statement, or on none, without the totals looking wrong.
+SUBTYPES_BY_TYPE = {
+    "asset": ("balance_sheet",),
+    "liability": ("balance_sheet",),
+    "equity": ("balance_sheet",),
+    "revenue": ("operating_revenue", "contra_revenue", "other_income"),
+    "expense": ("cogs", "operating_expense", "other_income"),
+}
 
 
 @dataclass(frozen=True)
@@ -102,13 +111,33 @@ def find_errors(data: dict) -> list[dict]:
                 "message": f"Account number {number} is used by more than one account.",
             })
         account_numbers.add(number)
-        if raw["subtype"] not in SUBTYPES:
+
+        account_type = raw["type"]
+        subtype = raw["subtype"]
+        if account_type not in SUBTYPES_BY_TYPE:
+            errors.append({
+                "code": "unknown_type",
+                "account": number,
+                "message": f"Account {number} ({raw['name']}) has type '{account_type}'. "
+                           f"Expected one of: {', '.join(SUBTYPES_BY_TYPE)}.",
+            })
+        if subtype not in SUBTYPES:
             errors.append({
                 "code": "unknown_subtype",
                 "account": number,
-                "message": f"Account {number} ({raw['name']}) has subtype '{raw['subtype']}'. "
+                "message": f"Account {number} ({raw['name']}) has subtype '{subtype}'. "
                            f"Expected one of: {', '.join(SUBTYPES)}.",
             })
+        if account_type in SUBTYPES_BY_TYPE and subtype in SUBTYPES:
+            allowed = SUBTYPES_BY_TYPE[account_type]
+            if subtype not in allowed:
+                errors.append({
+                    "code": "type_subtype_mismatch",
+                    "account": number,
+                    "message": f"Account {number} ({raw['name']}) has type '{account_type}' and subtype "
+                               f"'{subtype}', which do not go together. "
+                               f"For type '{account_type}' the subtype must be one of: {', '.join(allowed)}.",
+                })
 
     entry_ids = set()
     for raw in data["journal_entries"]:

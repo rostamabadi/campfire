@@ -111,8 +111,13 @@ Every error response has one shape, and reports every problem found, not only th
   and every statement request returns the full list instead of numbers. No partial
   statements. Checks: `unbalanced_entry`, `unknown_account`, `invalid_amount` (not a decimal
   string, negative, more than two decimals), `invalid_line` (debit and credit both
-  non-zero), `unknown_status`, `unknown_subtype`, `invalid_date`, `duplicate_id`. Each names
-  the `entry_id` or `account`. The checks apply to every entry, whatever its status. A file
+  non-zero), `unknown_status`, `unknown_type`, `unknown_subtype`, `type_subtype_mismatch`,
+  `invalid_date`, `duplicate_id`. Each names the `entry_id` or `account`.
+- **Type and subtype must agree.** Asset, liability and equity accounts are `balance_sheet`.
+  Revenue accounts are `operating_revenue`, `contra_revenue` or `other_income`. Expense
+  accounts are `cogs`, `operating_expense` or `other_income`. Without this check a
+  misfiled account would drop off the statement, or onto it, without any sign.
+- The checks apply to every entry, whatever its status. A file
   that is missing, not JSON, or missing a field is one `unreadable_ledger` error.
 - Messages are written for an accountant: they name the entry, the accounts and the amounts.
 - The HTML page shows the same messages above the statement, with the same status code.

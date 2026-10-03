@@ -126,6 +126,34 @@ def test_unknown_subtype():
     assert errors[0]["account"] == "8000"
 
 
+@pytest.mark.parametrize(
+    "account_type, subtype",
+    [
+        ("revenue", "balance_sheet"),      # would drop off the income statement
+        ("asset", "operating_expense"),    # would appear on it
+        ("expense", "operating_revenue"),
+        ("revenue", "cogs"),
+    ],
+)
+def test_account_type_and_subtype_must_agree(account_type, subtype):
+    accounts = CHART + [account("8000", "Misfiled", account_type, subtype)]
+
+    errors = find_errors(ledger_data(accounts=accounts))
+
+    assert [error["code"] for error in errors] == ["type_subtype_mismatch"]
+    assert errors[0]["account"] == "8000"
+    assert f"type '{account_type}' and subtype '{subtype}'" in errors[0]["message"]
+
+
+def test_unknown_account_type():
+    accounts = CHART + [account("8000", "Mystery", "income", "operating_revenue")]
+
+    errors = find_errors(ledger_data(accounts=accounts))
+
+    assert [error["code"] for error in errors] == ["unknown_type"]
+    assert errors[0]["account"] == "8000"
+
+
 def test_invalid_entry_date():
     data = ledger_data(entry("JE-1", "2026-02-30", debit("1100", "100.00"), credit("4000", "100.00")))
 
