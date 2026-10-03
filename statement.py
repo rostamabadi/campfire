@@ -42,6 +42,7 @@ class IncomeStatement:
     operating_income: Decimal
     other_income: Section
     net_income: Decimal
+    balance_sheet_movement: Section  # the control total: its total always equals net_income
     warnings: list[dict]
 
 
@@ -176,5 +177,6 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
         operating_income=operating_income,
         other_income=other_income,
         net_income=net_income,
+        balance_sheet_movement=balance_sheet_movement,
         warnings=find_warnings(ledger, start, end),
     )

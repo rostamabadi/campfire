@@ -93,9 +93,18 @@ negatives exist only in the HTML.
   "operating_income": "-44522.32",
   "other_income": {"lines": [], "total": "42.18"},
   "net_income": "-44480.14",
+  "balance_sheet_movement": {
+    "lines": [{"account": "1000", "name": "Cash", "amount": "-52007.07"}],
+    "total": "-44480.14"
+  },
   "warnings": []
 }
 ```
+
+`balance_sheet_movement` is the control total made visible: debits − credits per
+balance-sheet account for the same entries, every account listed. Its total always equals
+`net_income`. The page shows it in a "Check" table under the statement. It is the movement
+over the range, not a balance sheet: there are no balances as of a date.
 
 ## Errors
 
@@ -176,6 +185,8 @@ Net income by month: January (21,529.65), February (13,230.25), March (9,720.24)
 - Invariants on the real ledger over many ranges: sub-ranges add up to the whole range, and
   net income equals the net movement in balance-sheet accounts.
 - Warnings: drafts and possible duplicates, and that neither changes the totals.
+- The control total: Q1 movement per balance-sheet account by hand, and a mismatch forced by
+  allowing a subtype that no section uses.
 - Each ledger check and each request error, through the Flask test client.
 - Expected values are worked out by hand, never copied from the app's output.
 

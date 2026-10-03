@@ -82,6 +82,17 @@ def test_q1_2026_json(client):
             "total": "42.18",
         },
         "net_income": "-44480.14",
+        "balance_sheet_movement": {
+            "lines": [
+                {"account": "1000", "name": "Cash", "amount": "-52007.07"},
+                {"account": "1100", "name": "Accounts Receivable", "amount": "34399.75"},
+                {"account": "1200", "name": "Inventory", "amount": "-14272.75"},
+                {"account": "2000", "name": "Accounts Payable", "amount": "-3600.07"},
+                {"account": "2100", "name": "Deferred Revenue", "amount": "-9000.00"},
+                {"account": "3000", "name": "Retained Earnings", "amount": "0.00"},
+            ],
+            "total": "-44480.14",
+        },
         "warnings": [
             {
                 "code": "draft_not_included",
@@ -101,7 +112,7 @@ def test_json_keeps_the_order_of_the_statement(client):
         "company", "currency", "start", "end",
         "revenue", "cost_of_goods_sold", "gross_profit",
         "operating_expenses", "operating_income",
-        "other_income", "net_income", "warnings",
+        "other_income", "net_income", "balance_sheet_movement", "warnings",
     ]
 
 
@@ -240,6 +251,16 @@ def test_page_shows_q1_2026_the_way_an_accountant_reads_it(client):
     assert "(44,480.14)" in text    # net income
     assert "JE-019" in text         # the draft warning
     assert 'value="2026-01-01"' in text and 'value="2026-03-31"' in text  # the form keeps the dates
+
+
+def test_page_shows_the_balance_sheet_movement_that_backs_the_control_total(client):
+    text = client.get(f"/?{Q1}").text
+
+    assert "Check: movement in balance-sheet accounts" in text
+    assert "1000 Cash" in text
+    assert "(52,007.07)" in text   # cash went down
+    assert "34,399.75" in text     # receivables went up
+    assert text.count("(44,480.14)") == 2  # net income, and the movement total that equals it
 
 
 def test_page_sections_appear_in_statement_order(client):

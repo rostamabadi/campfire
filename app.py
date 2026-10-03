@@ -77,6 +77,7 @@ def statement_json(statement: IncomeStatement) -> dict:
         "operating_income": money(statement.operating_income),
         "other_income": section_json(statement.other_income),
         "net_income": money(statement.net_income),
+        "balance_sheet_movement": section_json(statement.balance_sheet_movement),
         "warnings": statement.warnings,
     }
 

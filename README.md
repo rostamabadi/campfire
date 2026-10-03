@@ -71,11 +71,16 @@ range. Amounts are decimal strings, never JSON numbers. A negative amount has a 
   "operating_income": "-44522.32",
   "other_income": {"lines": ["..."], "total": "42.18"},
   "net_income": "-44480.14",
+  "balance_sheet_movement": {"lines": ["..."], "total": "-44480.14"},
   "warnings": [
     {"code": "draft_not_included", "entry_ids": ["JE-019"], "date": "2026-03-15", "message": "..."}
   ]
 }
 ```
+
+`balance_sheet_movement` is a check, not a balance sheet. It is debits minus credits on each
+balance-sheet account for the same entries. Every entry balances, so its total must equal
+`net_income`. If it ever does not, the app returns an error instead of a statement.
 
 Errors always have one shape and list every problem found:
 

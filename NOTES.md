@@ -20,12 +20,10 @@
 - **Every income-statement account has a line**, 0.00 when it has no activity.
 - **Money is `Decimal`, read from the strings**, and a string in the JSON. An amount given as
   a JSON number is rejected.
-- **Bad data blocks the statement.** An unbalanced entry, an entry with fewer than two lines,
-  unknown account, invalid amount or date, unknown status, type or subtype, or reused id
-  returns 500 listing every problem, on the page too. A partial statement could be wrong
-  without looking wrong.
-- **Type and subtype must agree.** A `revenue` account filed as `balance_sheet` would drop
-  off the statement without any sign, so that is an error too.
+- **Bad data blocks the statement.** An unbalanced entry, fewer than two lines, unknown
+  account, invalid amount or date, unknown status, type or subtype, or reused id returns 500
+  listing every problem, on the page too. So does a type and subtype that disagree: a
+  `revenue` account filed as `balance_sheet` would drop off the statement without any sign.
 - **Possible duplicates are flagged, not removed.** Two posted entries with the same date
   and identical lines stay in the totals, since it cannot be proven from the data. JE-009
   and JE-010 raise nothing because JE-009 is already void.
@@ -37,6 +35,8 @@
   code. The tests compare against those figures, with the working in the comments.
 - Two invariants run over 1,035 date ranges: net income equals the net movement in
   balance-sheet accounts (the other half of each entry), and adjacent ranges add up.
+- The app repeats the first one on every request and shows the movement under the
+  statement. A mismatch returns an error, not numbers.
 - Twelve rules were broken one at a time, such as counting drafts, an exclusive end date,
   dropping inactive accounts and `abs()` on contra. Every one made tests fail.
 - The running app's page and JSON were compared with the hand-worked figures.
@@ -51,7 +51,7 @@ Claude Code helped read the brief, list the traps in the data, and write the cod
 - **Wrong:** its first page titled the warning box "Not reflected in the totals", which is
   false for possible duplicates, since those are included.
 - **Not trusted:** the tests passed on the first run, which proves little. That is why the
-  rules were broken on purpose, and why the Q1 figures came from the ledger, not the app.
+  rules were broken on purpose.
 
 ## Next
 

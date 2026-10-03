@@ -77,6 +77,24 @@ def test_q1_2026_every_line_and_subtotal(real_ledger):
     assert statement.net_income == D("-44480.14")  # -44,522.32 + 42.18
 
 
+def test_q1_2026_balance_sheet_movement(real_ledger):
+    statement = income_statement(real_ledger, day("2026-01-01"), day("2026-03-31"))
+
+    # Debits minus credits per balance-sheet account, from the posted Q1 entries.
+    assert amounts(statement.balance_sheet_movement) == {
+        # in: JE-013 12,450.75 + JE-023 42.18. out: payroll 3 x 18,500.00 + rent 9,000.00
+        "1000": D("-52007.07"),
+        # billed: 12,450.75 + 12,000.00 + 8,200.00 + 14,850.00. less: return 650.25, payment 12,450.75
+        "1100": D("34399.75"),
+        "1200": D("-14272.75"),  # the three cost of goods sold entries
+        "2000": D("-3600.07"),   # owed: 2,500.10 + 1,199.97, less the 100.00 vendor credit
+        "2100": D("-9000.00"),   # 12,000.00 deferred, 3 x 1,000.00 recognized
+        "3000": D("0.00"),
+    }
+    assert statement.balance_sheet_movement.total == D("-44480.14")
+    assert statement.balance_sheet_movement.total == statement.net_income
+
+
 @pytest.mark.parametrize(
     "start, end, net_revenue, cogs, operating_expenses, other_income, net_income",
     [
