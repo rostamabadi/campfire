@@ -8,9 +8,18 @@ from pathlib import Path
 import pytest
 
 from builders import CHART, account, credit, debit, entry, ledger_data
-from ledger import LedgerError, find_errors, load_ledger, parse_amount, parse_date, parse_ledger
+from ledger import LedgerError, load_ledger, parse_amount, parse_date, parse_ledger
 
 LEDGER_PATH = Path(__file__).parent.parent / "ledger.json"
+
+
+def find_errors(data):
+    """The blocking errors reported for this data, or an empty list if it loads."""
+    try:
+        parse_ledger(data)
+    except LedgerError as problem:
+        return problem.errors
+    return []
 
 
 def error_codes(data):
@@ -41,14 +50,24 @@ def test_amounts_load_as_decimal_and_dates_as_date():
 
 # --- parsing single values ---
 
-@pytest.mark.parametrize("text", ["0.00", "12450.75", "5000", "0.1"])
+@pytest.mark.parametrize("text", ["0.00", "12450.75", "5000", "0.1", "999999999999999.99"])
 def test_valid_amounts(text):
     assert parse_amount(text) == Decimal(text)
 
 
-@pytest.mark.parametrize("value", ["abc", "", "-5.00", "1.005", "NaN", "Infinity", 100.0, 100, None])
+@pytest.mark.parametrize(
+    "value",
+    ["abc", "", "-5.00", "1.005", "NaN", "Infinity", "1000000000000000.00", 100.0, 100, None],
+)
 def test_invalid_amounts(value):
     assert parse_amount(value) is None
+
+
+def test_the_largest_amounts_still_add_up_exactly():
+    # Sums are exact up to 28 significant digits. The amount limit keeps totals far below that.
+    largest = parse_amount("999999999999999.99")
+
+    assert largest + largest + Decimal("0.01") == Decimal("1999999999999999.99")
 
 
 def test_valid_date():
@@ -78,12 +97,109 @@ def test_unbalanced_entry():
     assert "debits 100.00, credits 90.00" in errors[0]["message"]
 
 
-def test_an_unbalanced_draft_is_still_an_error():
+# --- problems in draft and void entries cannot change the totals, so they only warn ---
+
+@pytest.mark.parametrize("status, wording", [("draft", "This entry is a draft"), ("void", "This entry is void")])
+def test_a_problem_in_a_draft_or_void_entry_is_a_warning_and_the_entry_is_left_out(status, wording):
     data = ledger_data(
-        entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "90.00"), status="draft")
+        entry("JE-1", "2026-01-05", debit("1100", "50.00"), credit("4000", "50.00")),
+        entry("JE-2", "2026-01-06", debit("1100", "100.00"), credit("4000", "90.00"), status=status),
+    )
+
+    ledger = parse_ledger(data)  # does not raise
+
+    assert [entry_.id for entry_ in ledger.entries] == ["JE-1"]
+    (warning,) = ledger.warnings
+    assert warning["code"] == "unbalanced_entry"
+    assert warning["entry_id"] == "JE-2"
+    assert warning["message"] == (
+        f"JE-2 does not balance: debits 100.00, credits 90.00. {wording}, so the totals are not affected."
+    )
+
+
+def test_the_same_problem_in_a_posted_entry_blocks():
+    data = ledger_data(
+        entry("JE-2", "2026-01-06", debit("1100", "100.00"), credit("4000", "90.00"), status="posted"),
     )
 
     assert error_codes(data) == ["unbalanced_entry"]
+
+
+def test_a_void_entry_that_reuses_an_id_is_a_warning():
+    data = ledger_data(
+        entry("JE-1", "2026-01-05", debit("1100", "50.00"), credit("4000", "50.00")),
+        entry("JE-1", "2026-01-05", debit("1100", "50.00"), credit("4000", "50.00"), status="void"),
+    )
+
+    ledger = parse_ledger(data)
+
+    assert [warning["code"] for warning in ledger.warnings] == ["duplicate_id"]
+    assert len(ledger.entries) == 1
+
+
+def test_a_sound_draft_is_loaded_without_warnings():
+    data = ledger_data(
+        entry("JE-1", "2026-01-05", debit("6000", "50.00"), credit("2000", "50.00"), status="draft"),
+    )
+
+    ledger = parse_ledger(data)
+
+    assert [entry_.id for entry_ in ledger.entries] == ["JE-1"]
+    assert ledger.warnings == []
+
+
+# --- missing fields ---
+
+def test_a_posted_entry_with_a_missing_field_is_named():
+    data = ledger_data(entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")))
+    del data["journal_entries"][0]["date"]
+    del data["journal_entries"][0]["lines"]
+
+    errors = find_errors(data)
+
+    assert errors == [{"code": "missing_field", "entry_id": "JE-1", "message": "JE-1 is missing: date, lines."}]
+
+
+def test_an_entry_without_an_id_is_named_by_its_position():
+    data = ledger_data(
+        entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")),
+        entry("JE-2", "2026-01-06", debit("1100", "100.00"), credit("4000", "100.00")),
+    )
+    del data["journal_entries"][1]["id"]
+
+    errors = find_errors(data)
+
+    assert [error["message"] for error in errors] == ["entry #2 is missing: id."]
+
+
+def test_a_line_with_a_missing_field():
+    data = ledger_data(entry("JE-1", "2026-01-05", {"account": "1100", "debit": "100.00"}, credit("4000", "100.00")))
+
+    errors = find_errors(data)
+
+    assert [error["code"] for error in errors] == ["missing_field"]
+    assert errors[0]["message"] == "JE-1 has a line that is missing: credit."
+
+
+def test_an_account_with_a_missing_field():
+    accounts = CHART + [{"number": "8000", "name": "Half an account"}]
+
+    errors = find_errors(ledger_data(accounts=accounts))
+
+    assert errors == [{
+        "code": "missing_field",
+        "account": "8000",
+        "message": "Account 8000 is missing: type, subtype, is_active.",
+    }]
+
+
+def test_the_memo_is_optional():
+    data = ledger_data(entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")))
+    del data["journal_entries"][0]["memo"]
+
+    ledger = parse_ledger(data)
+
+    assert ledger.entries[0].memo == ""
 
 
 def test_unknown_account():
@@ -242,10 +358,17 @@ def test_file_that_is_not_json(tmp_path):
     assert "could not be read" in unreadable_message(path)
 
 
-def test_file_with_a_missing_field(tmp_path):
+def test_file_without_a_top_level_field(tmp_path):
     data = ledger_data(entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")))
-    del data["journal_entries"][0]["lines"]
+    del data["journal_entries"]
     path = tmp_path / "ledger.json"
     path.write_text(json.dumps(data))
 
-    assert "missing the field 'lines'" in unreadable_message(path)
+    assert "missing the field 'journal_entries'" in unreadable_message(path)
+
+
+def test_file_with_the_wrong_structure(tmp_path):
+    path = tmp_path / "ledger.json"
+    path.write_text(json.dumps({"company": "Test Co", "currency": "USD", "accounts": ["oops"], "journal_entries": []}))
+
+    assert "could not be read" in unreadable_message(path)
