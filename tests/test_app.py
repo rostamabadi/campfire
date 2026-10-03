@@ -256,7 +256,8 @@ def test_page_shows_q1_2026_the_way_an_accountant_reads_it(client):
 def test_page_shows_the_balance_sheet_movement_that_backs_the_control_total(client):
     text = client.get(f"/?{Q1}").text
 
-    assert "Check: movement in balance-sheet accounts" in text
+    assert "<summary>Check: movement in balance-sheet accounts</summary>" in text
+    assert "<details>" in text and "<details open" not in text  # collapsed until clicked
     assert "1000 Cash" in text
     assert "(52,007.07)" in text   # cash went down
     assert "34,399.75" in text     # receivables went up

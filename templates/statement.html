@@ -18,7 +18,8 @@
     tr.subtotal td { border-top: 1px solid #888; }
     tr.result td { font-weight: bold; border-top: 1px solid #222; padding-top: 0.5rem; padding-bottom: 0.5rem; }
     tr.net td { border-bottom: 3px double #222; }
-    h3 { margin-top: 2.5rem; }
+    details { margin-top: 2.5rem; }
+    summary { font-weight: bold; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -88,23 +89,25 @@
   {{ result_row("Net income", statement.net_income, "net") }}
 </table>
 
-<h3>Check: movement in balance-sheet accounts</h3>
-<p>
-  Debits minus credits on the balance-sheet accounts, for the same entries. Every entry
-  balances, so this total has to equal net income.
-</p>
-<table>
-  {% for line in statement.balance_sheet_movement.lines %}
-  <tr>
-    <td class="account">{{ line.account }} {{ line.name }}</td>
-    <td class="amount">{{ line.amount | accounting }}</td>
-  </tr>
-  {% endfor %}
-  <tr class="subtotal">
-    <td>Total movement (equals net income)</td>
-    <td class="amount">{{ statement.balance_sheet_movement.total | accounting }}</td>
-  </tr>
-</table>
+<details>
+  <summary>Check: movement in balance-sheet accounts</summary>
+  <p>
+    Debits minus credits on the balance-sheet accounts, for the same entries. Every entry
+    balances, so this total has to equal net income.
+  </p>
+  <table>
+    {% for line in statement.balance_sheet_movement.lines %}
+    <tr>
+      <td class="account">{{ line.account }} {{ line.name }}</td>
+      <td class="amount">{{ line.amount | accounting }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="subtotal">
+      <td>Total movement (equals net income)</td>
+      <td class="amount">{{ statement.balance_sheet_movement.total | accounting }}</td>
+    </tr>
+  </table>
+</details>
 {% endif %}
 
 </body>

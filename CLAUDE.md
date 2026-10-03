@@ -103,7 +103,7 @@ negatives exist only in the HTML.
 
 `balance_sheet_movement` is the control total made visible: debits − credits per
 balance-sheet account for the same entries, every account listed. Its total always equals
-`net_income`. The page shows it in a "Check" table under the statement. It is the movement
+`net_income`. The page shows it in a "Check" table under the statement, collapsed until clicked. It is the movement
 over the range, not a balance sheet: there are no balances as of a date.
 
 ## Errors
