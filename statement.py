@@ -89,6 +89,41 @@ def build_section(
     return Section(lines=lines, total=total)
 
 
+def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
+    """Things a reader should know about the range. Warnings never change the totals."""
+    warnings = []
+
+    for entry in entries_in_range(ledger, start, end, "draft"):
+        amount = sum((line.debit for line in entry.lines), ZERO)
+        warnings.append({
+            "code": "draft_not_included",
+            "entry_ids": [entry.id],
+            "date": entry.date.isoformat(),
+            "message": f"{entry.id} ({entry.date}, {entry.memo}, {amount:,.2f}) is a draft "
+                       f"and is not included in the totals.",
+        })
+
+    # Posted entries with the same date and identical lines may have been entered twice.
+    # That cannot be proven from the data, so they stay in the totals, as recorded.
+    ids_by_content = {}
+    for entry in entries_in_range(ledger, start, end, "posted"):
+        lines = sorted((line.account, line.debit, line.credit) for line in entry.lines)
+        content = (entry.date, tuple(lines))
+        ids_by_content.setdefault(content, []).append(entry.id)
+
+    for (entry_date, _lines), entry_ids in ids_by_content.items():
+        if len(entry_ids) > 1:
+            warnings.append({
+                "code": "possible_duplicate",
+                "entry_ids": entry_ids,
+                "date": entry_date.isoformat(),
+                "message": f"{' and '.join(entry_ids)} are posted on {entry_date} with identical lines. "
+                           f"All of them are included in the totals.",
+            })
+
+    return warnings
+
+
 def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     """The income statement for posted entries dated from start to end, both days included."""
     posted = entries_in_range(ledger, start, end, "posted")
@@ -119,5 +154,5 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
         operating_income=operating_income,
         other_income=other_income,
         net_income=net_income,
-        warnings=[],
+        warnings=find_warnings(ledger, start, end),
     )
