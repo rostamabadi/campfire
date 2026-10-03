@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Income statement</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; }
+    form { margin-bottom: 1.5rem; }
+    label { margin-right: 1rem; }
+    .errors, .warnings { padding: 0.5rem 1rem; margin-bottom: 1.5rem; border: 1px solid; }
+    .errors { border-color: #b00020; background: #fdecea; }
+    .warnings { border-color: #a06a00; background: #fff8e1; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 0.25rem 0.5rem; text-align: left; }
+    th.section { padding-top: 1.25rem; }
+    td.account { padding-left: 2rem; }
+    td.amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    tr.subtotal td { border-top: 1px solid #888; }
+    tr.result td { font-weight: bold; border-top: 1px solid #222; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    tr.net td { border-bottom: 3px double #222; }
+  </style>
+</head>
+<body>
+
+<h1>Income statement</h1>
+
+<form method="get" action="/">
+  <label>Start date <input type="date" name="start" value="{{ start }}"></label>
+  <label>End date <input type="date" name="end" value="{{ end }}"></label>
+  <button type="submit">Show statement</button>
+</form>
+
+{% if errors %}
+<div class="errors">
+  <p><strong>The statement could not be shown.</strong></p>
+  <ul>
+    {% for error in errors %}
+    <li>{{ error.message }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% macro section_rows(title, section, total_label) %}
+  <tr><th class="section" colspan="2">{{ title }}</th></tr>
+  {% for line in section.lines %}
+  <tr>
+    <td class="account">{{ line.account }} {{ line.name }}</td>
+    <td class="amount">{{ line.amount | accounting }}</td>
+  </tr>
+  {% endfor %}
+  <tr class="subtotal">
+    <td>{{ total_label }}</td>
+    <td class="amount">{{ section.total | accounting }}</td>
+  </tr>
+{% endmacro %}
+
+{% macro result_row(label, amount, extra_class="") %}
+  <tr class="result {{ extra_class }}">
+    <td>{{ label }}</td>
+    <td class="amount">{{ amount | accounting }}</td>
+  </tr>
+{% endmacro %}
+
+{% if statement %}
+<h2>{{ statement.company }}</h2>
+<p>{{ statement.start }} to {{ statement.end }}, both days included. Amounts in {{ statement.currency }}.</p>
+
+{% if statement.warnings %}
+<div class="warnings">
+  <p><strong>Notes on this statement</strong></p>
+  <ul>
+    {% for warning in statement.warnings %}
+    <li>{{ warning.message }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<table>
+  {{ section_rows("Revenue", statement.revenue, "Net revenue") }}
+  {{ section_rows("Cost of goods sold", statement.cost_of_goods_sold, "Total cost of goods sold") }}
+  {{ result_row("Gross profit", statement.gross_profit) }}
+  {{ section_rows("Operating expenses", statement.operating_expenses, "Total operating expenses") }}
+  {{ result_row("Operating income", statement.operating_income) }}
+  {{ section_rows("Other income", statement.other_income, "Total other income") }}
+  {{ result_row("Net income", statement.net_income, "net") }}
+</table>
+{% endif %}
+
+</body>
+</html>

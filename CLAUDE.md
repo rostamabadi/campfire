@@ -19,7 +19,7 @@ Python 3.14, uv, Flask (Jinja templates), pytest. No other dependencies without 
 
 ```
 uv sync
-uv run flask --app app run --port 8000   # port 5000 is taken by AirPlay on macOS
+uv run flask --app app run --port 5001   # Flask's default 5000 is taken by AirPlay on macOS
 uv run pytest
 ```
 
