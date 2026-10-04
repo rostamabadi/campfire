@@ -32,12 +32,27 @@ uv run pytest
 uv run python tests/mutation_check.py
 ```
 
-The second command plants 20 mistakes, one at a time, in a temporary copy of the project
-and confirms that the tests fail for each. It takes a few seconds.
+The first command runs the unit and integration tests. The second plants 20 mistakes, one
+at a time, in a temporary copy of the project and confirms that the tests fail for each. It
+takes a few seconds.
+
+| Folder | What it tests |
+| --- | --- |
+| `tests/unit` | Pure functions on small ledgers built inside the test. No files, no HTTP. |
+| `tests/integration` | `ledger.json` loaded from disk, and the HTTP layer through Flask's test client. |
+| `tests/e2e` | A real browser against the running app, with Playwright. |
+
+The browser tests need a browser, installed once, and are run on their own:
+
+```
+uv run playwright install chromium
+uv run pytest tests/e2e
+```
 
 ## Versions
 
-Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, on macOS 26.6.2.
+Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, Playwright 1.63.0 with pytest-playwright
+0.9.0, on macOS 26.6.2.
 
 ## Code
 
