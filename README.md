@@ -8,8 +8,16 @@ command runs both.
 
 ## Run
 
-You need [uv](https://docs.astral.sh/uv/) (`brew install uv`). It installs Python 3.14 and
-the dependencies on the first run.
+```
+./setup.sh        # once. Installs what is missing and is safe to run again
+./run_server.sh   # backend and frontend, on http://127.0.0.1:5001/
+```
+
+`setup.sh` makes sure [uv](https://docs.astral.sh/uv/) is installed, lets it install Python
+3.14 and the packages into `.venv` in this folder, and downloads the browser for the
+end-to-end tests. It uses no sudo and does not edit your shell profile.
+
+By hand, with uv already installed (`brew install uv`):
 
 ```
 uv sync
@@ -28,13 +36,9 @@ Port 5001 is used because Flask's default, 5000, is taken by AirPlay Receiver on
 ## Test
 
 ```
-uv run pytest
-uv run python tests/mutation_check.py
+./run_all_tests.sh   # unit, integration, end-to-end, then the mutation check
+./cicd.sh            # lint and type checks, then everything above
 ```
-
-The first command runs the unit and integration tests. The second plants 20 mistakes, one
-at a time, in a temporary copy of the project and confirms that the tests fail for each. It
-takes a few seconds.
 
 | Folder | What it tests |
 | --- | --- |
@@ -42,17 +46,24 @@ takes a few seconds.
 | `tests/integration` | `ledger.json` loaded from disk, and the HTTP layer through Flask's test client. |
 | `tests/e2e` | A real browser against the running app, with Playwright. |
 
-The browser tests need a browser, installed once, and are run on their own:
+The mutation check plants 20 mistakes, one at a time, in a temporary copy of the project and
+confirms that the tests fail for each. Lint is ruff, on the code and the tests. Types are
+mypy, on the application code. Neither has any suppression.
+
+By hand:
 
 ```
-uv run playwright install chromium
-uv run pytest tests/e2e
+uv run pytest                           # unit and integration
+uv run pytest tests/e2e                 # needs: uv run playwright install chromium
+uv run python tests/mutation_check.py
+uv run ruff check .
+uv run mypy
 ```
 
 ## Versions
 
 Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, Playwright 1.63.0 with pytest-playwright
-0.9.0, on macOS 26.6.2.
+0.9.0, ruff 0.16.10, mypy 2.4.0, on macOS 26.6.2.
 
 ## Code
 
@@ -65,6 +76,7 @@ Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, Playwright 1.63.0 with pyt
 | `app.py` | Flask routes, request validation, error responses, money formatting. |
 | `templates/statement.html` | The page: date form, errors, warnings, statement, check table, line detail. |
 | `tests/` | pytest, in `unit`, `integration` and `e2e`. `builders.py` holds the shared helpers. `mutation_check.py` plants mistakes. |
+| `setup.sh`, `run_server.sh`, `run_all_tests.sh`, `cicd.sh` | Set up a Mac, run the app, run every test, run lint and types and every test. |
 
 The path from the dates to the numbers: `app.py` `read_ledger` and `parse_range` →
 `statement.py` `income_statement` → `detail_lines_by_account` (which uses `entries_in_range`

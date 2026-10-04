@@ -23,7 +23,7 @@ This file holds the decisions and the working agreements. Each fact has one home
    brief. Not built for scale.
 
 Stack: Python 3.14, uv, Flask with Jinja templates, pytest, Playwright for the browser
-tests. No other dependencies without asking.
+tests, ruff for lint, mypy for types. No other dependencies without asking.
 
 ## Accounting rules
 
@@ -146,6 +146,8 @@ Net income by month: January (21,529.65), February (13,230.25), March (9,720.24)
 - Every change goes on a branch, never directly on `main`. Commit in small steps, push the
   branch, open a pull request and merge it with a merge commit, not a squash: the brief
   asks for real history.
+- Run `./cicd.sh` before merging: lint, types, then every test. Fix what it reports. No
+  suppressions such as `# type: ignore` or `# noqa`.
 - When a data assumption is made, add it to `NOTES.md` (one page at most).
 - When AI output turns out wrong or is corrected, add a line to the AI log in `NOTES.md`.
 - When a fact changes, change it in its one home, listed at the top of this file.
