@@ -21,12 +21,12 @@
 - **Money is `Decimal`, read from the strings**, and a string in the JSON. An amount given as
   a JSON number is rejected.
 - **Bad data blocks the statement only when it could change the totals.** A problem in the
-  chart of accounts or in a posted entry returns 500 listing every problem, on the page too:
-  unbalanced, unknown account, invalid amount or date, a type and subtype that disagree. The
-  same problem in a draft or void entry is only a note, since it never reaches the totals.
+  chart of accounts or a posted entry, such as an unbalanced entry or a type and subtype
+  that disagree, returns 500 listing every problem. The same problem in a draft or void
+  entry is only a note.
 - **Possible duplicates are flagged, not removed.** Two posted entries with the same date
-  and identical lines stay in the totals, since it cannot be proven from the data. JE-009
-  and JE-010 raise nothing because JE-009 is already void.
+  and identical lines stay in the totals. JE-009 and JE-010 raise nothing because JE-009 is
+  already void.
 - **No closing entries exist in the data**, so a range across the year end just sums activity.
 
 ## How the numbers were checked
@@ -35,10 +35,9 @@
   code. The tests compare against those figures, with the working in the comments.
 - Two invariants run over 1,035 date ranges: net income equals the net movement in
   balance-sheet accounts (the other half of each entry), and adjacent ranges add up.
-- The app repeats the first one on every request and shows the movement under the
-  statement. A mismatch returns an error, not numbers.
-- `tests/mutation_check.py` plants 19 mistakes one at a time, such as counting drafts, an
-  exclusive end date or `abs()` on contra. The tests fail for every one.
+- The app repeats the first one on every request. A mismatch returns an error, not numbers.
+- `tests/mutation_check.py` plants 19 mistakes one at a time, such as counting drafts or an
+  exclusive end date. The tests fail for every one.
 
 ## Where AI helped, and where it was wrong
 
@@ -47,8 +46,6 @@ Claude Code helped read the brief, list the traps in the data, and write the cod
 - **Wrong:** it assumed float arithmetic would visibly drift on this ledger. It does not:
   `1199.97 - 100.0` prints `1099.97`. A float implementation would pass tests built only on
   these figures, so there is a `0.10 + 0.20` test and a check that the JSON has no numbers.
-- **Wrong:** its first page titled the warning box "Not reflected in the totals", which is
-  false for possible duplicates, since those are included.
 - **Not trusted:** the tests passed on the first run, which proves little. That is why the
   mistakes are planted on purpose.
 
