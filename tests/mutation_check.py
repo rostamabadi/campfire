@@ -91,6 +91,12 @@ MISTAKES = [
         "for entry in []:",
     ),
     (
+        "the detail shows every line as counted",
+        "statement.py",
+        'counted=reason == "",',
+        "counted=True,",
+    ),
+    (
         "amounts pass through float",
         "ledger.py",
         "amount = Decimal(text)",
