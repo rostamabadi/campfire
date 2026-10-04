@@ -31,7 +31,7 @@ uv run pytest
 | `ledger.py` | Check the raw data, collecting every problem, then load it into dataclasses (`Decimal`, `date`). |
 | `statement.py` | Pure functions: sum posted lines per account for a range, lay out sections and subtotals, run the control total, find warnings. |
 | `app.py` | Flask routes, request validation, error responses, money formatting. |
-| `templates/statement.html` | Date form, errors, warnings, statement, collapsed check table. |
+| `templates/statement.html` | Date form, errors, warnings, statement, collapsed check table, collapsed line detail. |
 | `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. `mutation_check.py` plants mistakes to prove the tests catch them. |
 
 Routes: `GET /income-statement?start=YYYY-MM-DD&end=YYYY-MM-DD` returns JSON. `GET /`
@@ -107,6 +107,25 @@ balance-sheet account for the same entries, every account listed. Its total alwa
 `net_income`. The page shows it in a "Check" table under the statement, collapsed until
 clicked. It is the movement over the range, not a balance sheet: there are no balances as
 of a date.
+
+## Detail on the page
+
+Under the statement and the check there is a second collapsed section, "Detail: every
+journal line, by account", so that a reader can redo every sum by hand.
+
+- One collapsible block per account, collapsed by default, in statement order: the four
+  income statement sections, then the balance-sheet accounts. The block's heading shows the
+  account's amount. Each section ends with its subtotal.
+- Inside a block: every line in the ledger on that account, oldest first, with raw debit and
+  credit columns. Nothing is left out, whatever the status or the date.
+- A line counts when its entry is posted and dated inside the range. A line that does not
+  count is struck out and says why: `void`, `draft` or `outside the range`. When an entry is
+  both not posted and outside the range, the status is the reason shown.
+- The footer of a block shows the counted debits, the counted credits and the result.
+- It is on the page only. The JSON response does not carry it.
+- In the code each `StatementLine` carries `debits`, `credits` and `detail`, a list of
+  `DetailLine`. `detail_lines_by_account` builds them and takes "counted" from the same
+  `entries_in_range` call the totals use, so the two cannot disagree.
 
 ## Errors
 
@@ -204,6 +223,8 @@ Net income by month: January (21,529.65), February (13,230.25), March (9,720.24)
 - Warnings: drafts and possible duplicates, and that neither changes the totals.
 - The control total: Q1 movement per balance-sheet account by hand, and a mismatch forced by
   allowing a subtype that no section uses.
+- The detail: the lines listed for two accounts by hand, every ledger line listed exactly
+  once, and the counted lines adding up to the amounts shown, over many ranges.
 - Each ledger check and each request error, through the Flask test client.
 - Expected values are worked out by hand, never copied from the app's output.
 - `uv run python tests/mutation_check.py` plants one mistake at a time in a copy of the

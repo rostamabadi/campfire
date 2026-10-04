@@ -36,8 +36,10 @@
 - Two invariants run over 1,035 date ranges: net income equals the net movement in
   balance-sheet accounts (the other half of each entry), and adjacent ranges add up.
 - The app repeats the first one on every request. A mismatch returns an error, not numbers.
-- `tests/mutation_check.py` plants 19 mistakes one at a time, such as counting drafts or an
+- `tests/mutation_check.py` plants 20 mistakes one at a time, such as counting drafts or an
   exclusive end date. The tests fail for every one.
+- The page lists every journal line under its account, with ignored lines struck out and
+  the reason, so each amount can be added up by hand.
 
 ## Where AI helped, and where it was wrong
 

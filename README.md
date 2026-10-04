@@ -17,7 +17,9 @@ uv run flask --app app run --port 5001
 ```
 
 - Page: http://127.0.0.1:5001/ opens on the whole ledger, from the first posted entry to
-  the last. Change the dates to see any other range.
+  the last. Change the dates to see any other range. Under the statement, "Detail" lists
+  every journal line by account, with the lines that do not count struck out and the
+  reason, so each amount can be added up by hand.
 - API: http://127.0.0.1:5001/income-statement?start=2026-01-01&end=2026-03-31
 
 Port 5001 is used because Flask's default, 5000, is taken by AirPlay Receiver on macOS.
@@ -30,7 +32,7 @@ uv run pytest
 uv run python tests/mutation_check.py
 ```
 
-The second command plants 19 mistakes, one at a time, in a temporary copy of the project
+The second command plants 20 mistakes, one at a time, in a temporary copy of the project
 and confirms that the tests fail for each. It takes a few seconds.
 
 ## Versions
@@ -45,7 +47,7 @@ Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, on macOS 26.6.2.
 | `ledger.py` | Checks the raw data, then loads it into dataclasses with `Decimal` amounts. |
 | `statement.py` | Builds the statement: sums posted lines per account for the range, lays out sections and subtotals, runs the control total, finds warnings. |
 | `app.py` | Flask routes, request validation, error responses, money formatting. |
-| `templates/statement.html` | The page: date form, errors, warnings, statement, check table. |
+| `templates/statement.html` | The page: date form, errors, warnings, statement, check table, line detail. |
 | `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. `mutation_check.py` plants mistakes. |
 
 The path from the dates to the numbers: `app.py` `read_ledger` and `parse_range` →
