@@ -211,7 +211,9 @@ Net income by month: January (21,529.65), February (13,230.25), March (9,720.24)
 
 ## Working agreements
 
-- Commit after each working step, in small commits, on `main`, and push each one.
+- Every change goes on a branch, never directly on `main`. Commit in small steps, push the
+  branch, open a pull request and merge it with a merge commit, not a squash: the brief
+  asks for real history.
 - When a data assumption is made, add it to `NOTES.md` (one page at most).
 - When AI output turns out wrong or is corrected, add a line to the AI log in `NOTES.md`.
 - Deliverables: `README.md` (run commands and versions), `NOTES.md`, code and tests.
