@@ -4,6 +4,15 @@ A small server-rendered app that shows an income statement (P&L) for Northwind C
 Roasters for any date range. Brief:
 https://github.com/Campfire-eng/income-statement-take-home
 
+This file holds the decisions and the working agreements. Each fact has one home:
+
+| Fact | Where |
+| --- | --- |
+| Commands, versions, code map, code path | `README.md` |
+| Response shape, error and warning codes | `README.md` |
+| The Q1 result, the assumptions, how it was checked | `NOTES.md` |
+| Why the code is the way it is, and how to work on it | here |
+
 ## Priorities
 
 1. **Correct numbers for any date range.** A plain page with right numbers beats
@@ -13,29 +22,8 @@ https://github.com/Campfire-eng/income-statement-take-home
 3. **Sized for 2 hours.** No database, auth, Docker, styling work, or features beyond the
    brief. Not built for scale.
 
-## Stack and commands
-
-Python 3.14, uv, Flask (Jinja templates), pytest. No other dependencies without asking.
-
-```
-uv sync
-uv run flask --app app run --port 5001   # Flask's default 5000 is taken by AirPlay on macOS
-uv run pytest
-```
-
-## Layout
-
-| File | Role |
-| --- | --- |
-| `ledger.json` | The data, verbatim from the brief. Never edit it. |
-| `ledger.py` | Check the raw data, collecting every problem, then load it into dataclasses (`Decimal`, `date`). |
-| `statement.py` | Pure functions: sum posted lines per account for a range, lay out sections and subtotals, run the control total, find warnings. |
-| `app.py` | Flask routes, request validation, error responses, money formatting. |
-| `templates/statement.html` | Date form, errors, warnings, statement, collapsed check table, collapsed line detail. |
-| `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. `mutation_check.py` plants mistakes to prove the tests catch them. |
-
-Routes: `GET /income-statement?start=YYYY-MM-DD&end=YYYY-MM-DD` returns JSON. `GET /`
-renders the HTML page from the same function.
+Stack: Python 3.14, uv, Flask with Jinja templates, pytest, Playwright for the browser
+tests. No other dependencies without asking.
 
 ## Accounting rules
 
@@ -56,144 +44,74 @@ renders the HTML page from the same function.
 Gross profit = Revenue − Cost of goods sold. Operating income = Gross profit − Operating
 expenses. Net income = Operating income + Other income.
 
-The sign of a line comes only from its section's formula. No `abs()`, no flipping by
-subtype or account type.
-
-**Contra revenue** has no special-case arithmetic. It uses the Revenue formula, so its
-debit balance comes out negative on its own (`"-800.25"` in JSON, `(800.25)` in HTML). It
-is listed after the operating revenue accounts. The Revenue subtotal is net of contra and
-labelled "Net revenue". There is no separate gross revenue subtotal.
-
-Within a subtype, lines are ordered by account number, shorter numbers first, so that
-6000 comes before 10000.
+- **Sign.** The sign of a line comes only from its section's formula. No `abs()`, no
+  flipping by subtype or account type.
+- **Contra revenue** has no special-case arithmetic. Its debit balance comes out negative on
+  its own. It is listed after the operating revenue accounts, and the Revenue subtotal is
+  net of it, labelled "Net revenue".
+- **Order.** Within a subtype, lines are ordered by account number, shorter numbers first,
+  so that 6000 comes before 10000.
+- **Sections are defined once**, in `income_statement`: heading, subtotal label, subtypes
+  and sign. The page reads all of that from the `Section`. A new section also needs its
+  subtypes in `checks.py`, a key in `statement_json` and a row in the template's table.
 
 ## Money
 
 `Decimal` from the JSON strings, end to end. Never `float`. JSON amounts are strings with
-two decimals and a minus sign (`"-44480.14"`). Thousands separators and parentheses for
-negatives exist only in the HTML.
+two decimals and a minus sign. Thousands separators and parentheses for negatives exist
+only in the HTML. An amount must be below 10^15, which keeps every sum far below the 28
+digits at which Decimal would round.
 
-## Response shape
+## Bad data
 
-```json
-{
-  "company": "Northwind Coffee Roasters",
-  "currency": "USD",
-  "start": "2026-01-01",
-  "end": "2026-03-31",
-  "revenue": {
-    "lines": [
-      {"account": "4000", "name": "Product Revenue", "amount": "35650.75"},
-      {"account": "4900", "name": "Sales Returns & Discounts", "amount": "-800.25"}
-    ],
-    "total": "37850.50"
-  },
-  "cost_of_goods_sold": {"lines": [], "total": "14272.75"},
-  "gross_profit": "23577.75",
-  "operating_expenses": {"lines": [], "total": "68100.07"},
-  "operating_income": "-44522.32",
-  "other_income": {"lines": [], "total": "42.18"},
-  "net_income": "-44480.14",
-  "balance_sheet_movement": {
-    "lines": [{"account": "1000", "name": "Cash", "amount": "-52007.07"}],
-    "total": "-44480.14"
-  },
-  "warnings": []
-}
-```
+- The ledger file is read and checked on every request, so an edit shows up without a
+  restart.
+- **What blocks.** A problem blocks the statement when it could change the totals: any
+  problem in the chart of accounts, in a `posted` entry, or in an entry whose status is
+  missing or unknown. The response is every problem found, and no numbers.
+- **What only warns.** A problem in a `draft` or `void` entry. That entry is left out of
+  the ledger and the problem is reported on every statement.
+- **Type and subtype must agree.** Asset, liability and equity accounts are `balance_sheet`.
+  Revenue accounts are `operating_revenue`, `contra_revenue` or `other_income`. Expense
+  accounts are `cogs`, `operating_expense` or `other_income`. Without this a misfiled
+  account would drop off the statement, or onto it, without any sign.
+- Every error and warning is built by `checks.problem`: a code, where it is, a message
+  written for an accountant.
 
-`balance_sheet_movement` is the control total made visible: debits − credits per
-balance-sheet account for the same entries, every account listed. Its total always equals
-`net_income`. The page shows it in a "Check" table under the statement, collapsed until
-clicked. It is the movement over the range, not a balance sheet: there are no balances as
-of a date.
+## Duplicates and drafts
+
+- A reused entry id is a ledger error.
+- Two or more `posted` entries with the same date and identical lines are a *possible*
+  duplicate. That cannot be proven from the data, so all stay in the totals, as recorded,
+  and a warning is shown. A posted entry whose twin is `void` raises nothing: the void is
+  the fix (JE-009, JE-010). Detection is deliberately minimal. Improving it is planned.
+- A draft dated inside the range is shown as a warning. Void entries are not: they are
+  cancelled and can no longer change the statement.
+
+## Control total
+
+On every request, net income must equal the net movement (debits − credits) in
+balance-sheet accounts for the same entries. Every entry balances, so the two can only
+differ if the code left an account out, counted it twice or gave it the wrong sign. Then
+the response is an error with both figures, and no statement. It does not catch a line in
+the wrong section, or a wrong date or status filter. The movement is shown on the page in a
+collapsed "Check" table and returned as `balance_sheet_movement`. It is not a balance
+sheet: there are no balances as of a date.
 
 ## Detail on the page
 
-Under the statement and the check there is a second collapsed section, "Detail: every
-journal line, by account", so that a reader can redo every sum by hand.
+A second collapsed section lists every journal line by account, so that a reader can redo
+every sum by hand.
 
-- One collapsible block per account, collapsed by default, in statement order: the four
-  income statement sections, then the balance-sheet accounts. The block's heading shows the
-  account's amount. Each section ends with its subtotal.
-- Inside a block: every line in the ledger on that account, oldest first, with raw debit and
-  credit columns. Nothing is left out, whatever the status or the date.
+- One collapsible block per account, collapsed by default, in statement order, then the
+  balance-sheet accounts. Every line in the ledger on that account is listed, whatever its
+  status or date.
 - A line counts when its entry is posted and dated inside the range. A line that does not
-  count is struck out and says why: `void`, `draft` or `outside the range`. When an entry is
-  both not posted and outside the range, the status is the reason shown.
-- The footer of a block shows the counted debits, the counted credits and the result.
+  count is struck out and says why: `void`, `draft` or `outside the range`. When both apply,
+  the status is the reason shown.
+- Every amount on the statement is the sum of the counted lines listed, so what is shown
+  and what is summed cannot differ. `detail_lines_by_account` builds the lines.
 - It is on the page only. The JSON response does not carry it.
-- In the code each `StatementLine` carries `debits`, `credits` and `detail`, a list of
-  `DetailLine`. `detail_lines_by_account` builds them and takes "counted" from the same
-  `entries_in_range` call the totals use, so the two cannot disagree.
-
-## Errors
-
-Every error response has one shape, and reports every problem found, not only the first:
-
-```json
-{"errors": [{"code": "invalid_range", "field": "start", "message": "The start date 2026-04-01 is after the end date 2026-03-31."}]}
-```
-
-- **Request errors, HTTP 400.** `missing_parameter`, `invalid_date`, `invalid_range`. Each
-  names the `field`.
-- **Ledger errors, HTTP 500.** The ledger file is read and checked on every request, so an
-  edit shows up without a restart. With a blocking problem, the response is the full list
-  instead of numbers. No partial statements. Checks: `missing_field`, `unbalanced_entry`,
-  `unknown_account`, `invalid_amount` (not a decimal string, negative, more than two
-  decimals, or 10^15 and above), `invalid_line` (debit and credit both non-zero),
-  `too_few_lines` (fewer than two), `unknown_status`, `unknown_type`, `unknown_subtype`,
-  `type_subtype_mismatch`, `invalid_date`, `duplicate_id`. Each names the `entry_id` or
-  `account`. The memo is optional.
-- **What blocks.** A problem blocks when it could change the totals: any problem in the
-  chart of accounts, in a `posted` entry, or in an entry whose status is missing or unknown.
-  A problem in a `draft` or `void` entry is a warning, and that entry is left out of the
-  ledger.
-- **Type and subtype must agree.** Asset, liability and equity accounts are `balance_sheet`.
-  Revenue accounts are `operating_revenue`, `contra_revenue` or `other_income`. Expense
-  accounts are `cogs`, `operating_expense` or `other_income`. Without this check a
-  misfiled account would drop off the statement, or onto it, without any sign.
-- A file that is missing, not JSON, or has the wrong top-level structure is one
-  `unreadable_ledger` error.
-- **Amounts stay exact.** Decimal sums are exact up to 28 significant digits. The 10^15
-  limit on each amount keeps every total far below that.
-- **Everything else, same shape.** An unknown URL is `not_found` (404), a wrong method is
-  `method_not_allowed` (405), an unexpected failure is `internal_server_error` (500).
-- **Control total, HTTP 500.** On every request, net income must equal the net movement
-  (debits − credits) in balance-sheet accounts for the same posted entries. Every entry
-  balances, so the two can only differ if the code left an account out, counted it twice or
-  gave it the wrong sign. Then the response is one `control_total_mismatch` error with both
-  figures, and no statement. It does not catch a line in the wrong section, or a wrong date
-  or status filter.
-- Messages are written for an accountant: they name the entry, the accounts and the amounts.
-- The HTML page shows the same messages above the statement, with the same status code.
-- `GET /` with no query string is a first visit. It redirects to the whole ledger, from the
-  first posted entry to the last. With nothing posted it shows only the form.
-- A valid range with no activity is not an error. It is a statement of zeros.
-
-## Warnings
-
-Warnings do not change the totals. They ride along with a successful statement in
-`warnings`, and the page shows them in a box above the statement. Every warning has a
-`code` and a `message`.
-
-```json
-{"code": "draft_not_included", "entry_ids": ["JE-019"], "date": "2026-03-15",
- "memo": "Q1 bonus accrual (pending approval)", "amount": "5000.00",
- "message": "JE-019 (2026-03-15, Q1 bonus accrual (pending approval), 5,000.00) is a draft and is not included in the totals."}
-```
-
-- **`draft_not_included`**: one per draft entry dated in the range. Void entries are not
-  reported: they are cancelled and can no longer change the statement.
-- **Problems in draft and void entries**: the ledger check's own code, such as
-  `unbalanced_entry`, with the `entry_id`. These are shown on every statement, whatever the
-  range, because the entry may have no usable date.
-- **`possible_duplicate`**: two or more `posted` entries dated in the range with the same
-  date and identical lines. They cannot be proven duplicates from the data, so all stay in the totals, as
-  recorded. Nothing is dropped automatically. A posted entry whose twin is `void` raises
-  nothing: the void is the fix (JE-009, JE-010).
-- Duplicate detection is deliberately minimal (exact match, same date). Improving it is
-  planned for later.
 
 ## Reference figures
 
@@ -213,22 +131,15 @@ Net income by month: January (21,529.65), February (13,230.25), March (9,720.24)
 
 ## Tests
 
-- Q1 2026, every line and subtotal, against the hand-worked figures.
-- One test per data trap, each on a tiny ledger built inside the test: void and draft
-  excluded, inactive account included, a credit to an expense nets down, contra revenue
-  reduces revenue, other income placed by subtype, balance-sheet-only entries have no
-  effect, entries with more than two lines, inclusive range ends, unsorted input.
-- Invariants on the real ledger over many ranges: sub-ranges add up to the whole range, and
-  net income equals the net movement in balance-sheet accounts.
-- Warnings: drafts and possible duplicates, and that neither changes the totals.
-- The control total: Q1 movement per balance-sheet account by hand, and a mismatch forced by
-  allowing a subtype that no section uses.
-- The detail: the lines listed for two accounts by hand, every ledger line listed exactly
-  once, and the counted lines adding up to the amounts shown, over many ranges.
-- Each ledger check and each request error, through the Flask test client.
+- `tests/unit`: pure functions on small ledgers built inside the test. One test per rule
+  and per data trap. No files, no HTTP.
+- `tests/integration`: `ledger.json` from disk against the hand-worked figures, invariants
+  over many ranges, and the HTTP layer through Flask's test client.
+- `tests/e2e`: a real browser with Playwright. Run on their own, they need a browser.
 - Expected values are worked out by hand, never copied from the app's output.
-- `uv run python tests/mutation_check.py` plants one mistake at a time in a copy of the
-  project and confirms the tests fail. Add a mistake there when a new rule is added.
+- `tests/mutation_check.py` plants one mistake at a time in a copy of the project and
+  confirms the tests fail. It matches exact lines of source, so update it when those lines
+  change, and add a mistake there when a new rule is added.
 
 ## Working agreements
 
@@ -237,4 +148,4 @@ Net income by month: January (21,529.65), February (13,230.25), March (9,720.24)
   asks for real history.
 - When a data assumption is made, add it to `NOTES.md` (one page at most).
 - When AI output turns out wrong or is corrected, add a line to the AI log in `NOTES.md`.
-- Deliverables: `README.md` (run commands and versions), `NOTES.md`, code and tests.
+- When a fact changes, change it in its one home, listed at the top of this file.
