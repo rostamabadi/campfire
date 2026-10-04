@@ -188,7 +188,9 @@ def test_net_income_equals_the_net_movement_in_balance_sheet_accounts(real_ledge
     a line lands in the wrong section, gets the wrong sign, or an account is left out.
     """
     entry_days = {entry.date for entry in real_ledger.entries}
-    days = sorted(entry_days | {d - timedelta(days=1) for d in entry_days} | {d + timedelta(days=1) for d in entry_days})
+    day_before = {d - timedelta(days=1) for d in entry_days}
+    day_after = {d + timedelta(days=1) for d in entry_days}
+    days = sorted(entry_days | day_before | day_after)
 
     for start in days:
         for end in days:
