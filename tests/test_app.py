@@ -344,7 +344,25 @@ def test_page_shows_the_balance_sheet_movement_that_backs_the_control_total(clie
     assert "1000 Cash" in text
     assert "(52,007.07)" in text   # cash went down
     assert "34,399.75" in text     # receivables went up
-    assert text.count("(44,480.14)") == 2  # net income, and the movement total that equals it
+    # Net income, the movement total that equals it, and the same total again in the detail.
+    assert text.count("(44,480.14)") == 3
+
+
+def test_page_lists_every_journal_line_under_its_account(client):
+    text = client.get(f"/?{Q1}").text
+
+    assert "<summary>Detail: every journal line, by account</summary>" in text
+    assert "<summary>4000 Product Revenue: 35,650.75</summary>" in text
+    assert "<summary>6100 Rent: 9,000.00</summary>" in text
+    assert "<details open" not in text  # the detail and every account in it start collapsed
+
+    # Lines that do not count are marked for strike-through and say why. For Q1 those are the
+    # two lines each of JE-001 and JE-024 (outside the range), JE-009 and JE-025 (void) and
+    # JE-019 (draft).
+    assert text.count('<tr class="not-counted">') == 10
+    for reason in ["no, void", "no, draft", "no, outside the range"]:
+        assert reason in text
+    assert "February product sales (entered twice)" in text  # the void JE-009 is still listed
 
 
 def test_page_sections_appear_in_statement_order(client):

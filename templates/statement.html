@@ -20,6 +20,14 @@
     tr.net td { border-bottom: 3px double #222; }
     details { margin-top: 2.5rem; }
     summary { font-weight: bold; cursor: pointer; }
+    details details { margin: 0.5rem 0 0.5rem 1rem; }
+    details details summary { font-weight: normal; }
+    h4 { margin: 1.5rem 0 0.25rem; }
+    th.amount { text-align: right; }
+    td.nowrap { white-space: nowrap; }
+    p.group-total { margin: 0.5rem 0 0 1rem; font-weight: bold; }
+    tr.not-counted td { text-decoration: line-through; color: #777; }
+    tr.not-counted td.reason { text-decoration: none; }
   </style>
 </head>
 <body>
@@ -62,6 +70,42 @@
     <td>{{ label }}</td>
     <td class="amount">{{ amount | accounting }}</td>
   </tr>
+{% endmacro %}
+
+{# One section of the detail: a collapsible block per account with every journal line on it.
+   `plus` and `minus` name the section's formula, such as credits minus debits. #}
+{% macro detail_group(title, section, total_label, plus, minus) %}
+  <h4>{{ title }}</h4>
+  {% for line in section.lines %}
+  <details class="account-detail">
+    <summary>{{ line.account }} {{ line.name }}: {{ line.amount | accounting }}</summary>
+    <table>
+      <tr>
+        <th>Date</th><th>Entry</th><th>Memo</th>
+        <th class="amount">Debit</th><th class="amount">Credit</th><th>Counted</th>
+      </tr>
+      {% for item in line.detail %}
+      <tr class="{{ 'counted' if item.counted else 'not-counted' }}">
+        <td class="nowrap">{{ item.date }}</td>
+        <td class="nowrap">{{ item.entry_id }}</td>
+        <td>{{ item.memo }}</td>
+        <td class="amount">{{ item.debit | accounting if item.debit else "" }}</td>
+        <td class="amount">{{ item.credit | accounting if item.credit else "" }}</td>
+        <td class="reason">{{ "yes" if item.counted else "no, " ~ item.reason }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">No lines on this account.</td></tr>
+      {% endfor %}
+      <tr class="subtotal">
+        <td colspan="3">Counted totals, then {{ plus }} minus {{ minus }}</td>
+        <td class="amount">{{ line.debits | accounting }}</td>
+        <td class="amount">{{ line.credits | accounting }}</td>
+        <td class="amount">{{ line.amount | accounting }}</td>
+      </tr>
+    </table>
+  </details>
+  {% endfor %}
+  <p class="group-total">{{ total_label }}: {{ section.total | accounting }}</p>
 {% endmacro %}
 
 {% if statement %}
@@ -107,6 +151,20 @@
       <td class="amount">{{ statement.balance_sheet_movement.total | accounting }}</td>
     </tr>
   </table>
+</details>
+
+<details>
+  <summary>Detail: every journal line, by account</summary>
+  <p>
+    Every line in the ledger, under its account. A line counts when its entry is posted and
+    dated inside the range. The others are struck out, with the reason. Open an account to
+    add up its lines by hand.
+  </p>
+  {{ detail_group("Revenue", statement.revenue, "Net revenue", "credits", "debits") }}
+  {{ detail_group("Cost of goods sold", statement.cost_of_goods_sold, "Total cost of goods sold", "debits", "credits") }}
+  {{ detail_group("Operating expenses", statement.operating_expenses, "Total operating expenses", "debits", "credits") }}
+  {{ detail_group("Other income", statement.other_income, "Total other income", "credits", "debits") }}
+  {{ detail_group("Balance-sheet accounts (the check)", statement.balance_sheet_movement, "Total movement", "debits", "credits") }}
 </details>
 {% endif %}
 
