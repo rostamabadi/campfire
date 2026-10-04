@@ -77,3 +77,53 @@ def test_the_detail_lists_every_line_and_strikes_out_the_ones_not_counted(page: 
     expect(void_line.locator("td.reason")).to_have_css("text-decoration-line", "none")
     expect(counted_line.locator("td").first).to_have_css("text-decoration-line", "none")
     expect(product_revenue.locator("tr.subtotal")).to_contain_text("35,650.75")
+
+
+def not_counted_reasons(page: Page) -> list[str]:
+    """The reason shown on every struck-out line of the detail, open or collapsed."""
+    return page.locator("tr.not-counted td.reason").all_text_contents()
+
+
+def test_a_single_day_counts_only_that_day(page: Page):
+    page.goto("/")
+    page.get_by_label("Start date").fill("2026-03-31")
+    page.get_by_label("End date").fill("2026-03-31")
+    page.get_by_role("button", name="Show statement").click()
+
+    # 2026-03-31 has three posted entries: subscription revenue 1,000.00 (JE-021),
+    # payroll 18,500.00 (JE-022) and interest 42.18 (JE-023).
+    expect(page.locator("tr", has_text="Net revenue")).to_contain_text("1,000.00")
+    expect(page.locator("tr", has_text="Total operating expenses")).to_contain_text("18,500.00")
+    expect(page.locator("tr", has_text="Total other income")).to_contain_text("42.18")
+    expect(net_income(page)).to_have_text("(17,457.82)")  # 1,000.00 - 18,500.00 + 42.18
+    expect(page.locator(".warnings")).to_have_count(0)  # the draft JE-019 is dated 2026-03-15
+
+    # Of the 51 lines in the ledger, only the 6 lines of those three entries count.
+    expect(page.locator("tr.counted")).to_have_count(6)
+    expect(page.locator("tr.not-counted")).to_have_count(45)
+
+    detail = page.locator("details", has=page.locator("summary", has_text="Detail: every journal line"))
+    salaries = detail.locator("details", has=page.locator("summary", has_text="6000 Salaries"))
+    detail.locator("summary").first.click()
+    salaries.locator("summary").click()
+
+    expect(salaries.locator("summary")).to_have_text("6000 Salaries: 18,500.00")
+    expect(salaries.locator("tr.counted")).to_have_count(1)
+    expect(salaries.locator("tr.counted")).to_contain_text("JE-022")
+    expect(salaries.locator("tr", has_text="JE-006")).to_contain_text("no, outside the range")
+    expect(salaries.locator("tr", has_text="JE-019")).to_contain_text("no, draft")
+
+
+def test_a_very_large_range_includes_every_line_in_the_ledger(page: Page):
+    page.goto("/?start=1900-01-01&end=2999-12-31")
+
+    # Every posted entry: December 5,000.00, Q1 (44,480.14) and April 9,100.00.
+    expect(page.locator("tr", has_text="Net revenue")).to_contain_text("51,950.50")
+    expect(net_income(page)).to_have_text("(30,380.14)")
+    expect(page.locator(".warnings")).to_contain_text("JE-019")
+
+    # All 51 lines of the ledger are listed. Nothing is outside the range, so the only lines
+    # not counted are the two lines each of the void JE-009 and JE-025 and the draft JE-019.
+    expect(page.locator("tr.counted")).to_have_count(45)
+    expect(page.locator("tr.not-counted")).to_have_count(6)
+    assert sorted(not_counted_reasons(page)) == ["no, draft"] * 2 + ["no, void"] * 4
