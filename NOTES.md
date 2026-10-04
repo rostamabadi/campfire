@@ -45,9 +45,17 @@
 
 Claude Code helped read the brief, list the traps in the data, and write the code and tests.
 
-- **Wrong:** it assumed float arithmetic would visibly drift on this ledger. It does not:
-  `1199.97 - 100.0` prints `1099.97`. A float implementation would pass tests built only on
-  these figures, so there is a `0.10 + 0.20` test and a check that the JSON has no numbers.
+- **Wrong, float drift:** it assumed floats would visibly drift on this ledger. They do not:
+  `1199.97 - 100.0` prints `1099.97`. So there is a `0.10 + 0.20` test and a check that the
+  JSON has no numbers.
+- **Wrong, a test expectation:** it expected 9 struck-out lines for Q1 and the page showed
+  10. A recount by hand (five entries of two lines) proved the page right.
+- **Wrong, a label:** its first warning box was titled "Not reflected in the totals", which
+  is false for possible duplicates, since those are included.
+- **Wrong, a stale check:** it planted mistakes once, then added four rules without
+  rerunning. A review caught it, and the check is now a script.
+- **Overruled:** it proposed blocking the statement on a bad draft, and leaving
+  out-of-range lines out of the detail. Neither was right for a reader checking by hand.
 - **Not trusted:** the tests passed on the first run, which proves little. That is why the
   mistakes are planted on purpose.
 
