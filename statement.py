@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from checks import problem
 from ledger import Entry, Ledger
 
 ZERO = Decimal("0.00")
@@ -168,15 +169,14 @@ def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
 
     for entry in entries_in_range(ledger, start, end, "draft"):
         amount = sum((line.debit for line in entry.lines), ZERO)
-        warnings.append({
-            "code": "draft_not_included",
-            "entry_ids": [entry.id],
-            "date": entry.date.isoformat(),
-            "memo": entry.memo,
-            "amount": f"{amount:.2f}",
-            "message": f"{entry.id} ({entry.date}, {entry.memo}, {amount:,.2f}) is a draft "
-                       f"and is not included in the totals.",
-        })
+        warnings.append(problem(
+            "draft_not_included",
+            f"{entry.id} ({entry.date}, {entry.memo}, {amount:,.2f}) is a draft and is not included in the totals.",
+            entry_ids=[entry.id],
+            date=entry.date.isoformat(),
+            memo=entry.memo,
+            amount=f"{amount:.2f}",
+        ))
 
     # Posted entries with the same date and identical lines may have been entered twice.
     # That cannot be proven from the data, so they stay in the totals, as recorded.
@@ -188,13 +188,13 @@ def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
 
     for (entry_date, _lines), entry_ids in ids_by_content.items():
         if len(entry_ids) > 1:
-            warnings.append({
-                "code": "possible_duplicate",
-                "entry_ids": entry_ids,
-                "date": entry_date.isoformat(),
-                "message": f"{' and '.join(entry_ids)} are posted on {entry_date} with identical lines. "
-                           f"All of them are included in the totals.",
-            })
+            warnings.append(problem(
+                "possible_duplicate",
+                f"{' and '.join(entry_ids)} are posted on {entry_date} with identical lines. "
+                f"All of them are included in the totals.",
+                entry_ids=entry_ids,
+                date=entry_date.isoformat(),
+            ))
 
     return warnings
 
@@ -226,12 +226,11 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
         "Balance-sheet accounts", "Total movement", ["balance_sheet"], credit_normal=False
     )
     if balance_sheet_movement.total != net_income:
-        raise ControlTotalError({
-            "code": "control_total_mismatch",
-            "message": f"For {start} to {end}, net income is {net_income:,.2f} but the balance-sheet "
-                       f"accounts moved by {balance_sheet_movement.total:,.2f}. These must be equal, "
-                       f"so the statement is not shown.",
-        })
+        raise ControlTotalError(problem(
+            "control_total_mismatch",
+            f"For {start} to {end}, net income is {net_income:,.2f} but the balance-sheet accounts "
+            f"moved by {balance_sheet_movement.total:,.2f}. These must be equal, so the statement is not shown.",
+        ))
 
     return IncomeStatement(
         company=ledger.company,

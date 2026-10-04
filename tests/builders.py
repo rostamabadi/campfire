@@ -22,11 +22,11 @@ CHART = [
 def allow_a_subtype_that_no_section_uses(monkeypatch):
     """Imitate a half-finished code change: "other_expense" is accepted by the ledger checks,
     but no section of the statement picks it up. The control total has to notice."""
-    import ledger
+    import checks
 
-    monkeypatch.setattr(ledger, "SUBTYPES", ledger.SUBTYPES + ("other_expense",))
+    monkeypatch.setattr(checks, "SUBTYPES", checks.SUBTYPES + ("other_expense",))
     monkeypatch.setitem(
-        ledger.SUBTYPES_BY_TYPE, "expense", ledger.SUBTYPES_BY_TYPE["expense"] + ("other_expense",)
+        checks.SUBTYPES_BY_TYPE, "expense", checks.SUBTYPES_BY_TYPE["expense"] + ("other_expense",)
     )
     return CHART + [account("7500", "Bank Fees", "expense", "other_expense")]
 
