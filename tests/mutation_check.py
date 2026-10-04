@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-COPIED = ["ledger.json", "ledger.py", "statement.py", "app.py", "templates", "tests", "pyproject.toml"]
+COPIED = ["ledger.json", "checks.py", "ledger.py", "statement.py", "app.py", "templates", "tests", "pyproject.toml"]
 
 # (the mistake, the file, the correct code, the wrong code)
 MISTAKES = [
@@ -98,25 +98,25 @@ MISTAKES = [
     ),
     (
         "amounts pass through float",
-        "ledger.py",
+        "checks.py",
         "amount = Decimal(text)",
         "amount = Decimal(float(text))",
     ),
     (
         "JSON numbers are accepted as amounts",
-        "ledger.py",
+        "checks.py",
         "if not isinstance(text, str):",
         "if False:",
     ),
     (
         "unbalanced entries are accepted",
-        "ledger.py",
+        "checks.py",
         "if amounts_are_valid and total_debits != total_credits:",
         "if False:",
     ),
     (
         "a revenue account filed as balance_sheet is accepted",
-        "ledger.py",
+        "checks.py",
         "if subtype not in allowed:",
         "if False:",
     ),

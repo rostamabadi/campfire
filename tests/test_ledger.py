@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from builders import CHART, account, credit, debit, entry, ledger_data
-from ledger import LedgerError, load_ledger, parse_amount, parse_date, parse_ledger
+from checks import parse_amount, parse_date
+from ledger import LedgerError, load_ledger, parse_ledger
 
 LEDGER_PATH = Path(__file__).parent.parent / "ledger.json"
 

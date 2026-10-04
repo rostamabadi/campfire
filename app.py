@@ -6,7 +6,8 @@ from pathlib import Path
 from flask import Flask, redirect, render_template, request, url_for
 from werkzeug.exceptions import HTTPException
 
-from ledger import LedgerError, load_ledger, parse_date
+from checks import parse_date, problem
+from ledger import LedgerError, load_ledger
 from statement import ControlTotalError, IncomeStatement, Section, income_statement, posted_date_span
 
 LEDGER_PATH = Path(__file__).with_name("ledger.json")
@@ -31,26 +32,22 @@ def parse_range(args) -> tuple:
     for field in ("start", "end"):
         text = args.get(field, "").strip()
         if not text:
-            errors.append({
-                "code": "missing_parameter",
-                "field": field,
-                "message": f"The {field} date is required, as YYYY-MM-DD.",
-            })
+            errors.append(problem("missing_parameter", f"The {field} date is required, as YYYY-MM-DD.", field=field))
             continue
         dates[field] = parse_date(text)
         if dates[field] is None:
-            errors.append({
-                "code": "invalid_date",
-                "field": field,
-                "message": f"The {field} date '{text}' is not a valid date. Use YYYY-MM-DD, such as 2026-01-31.",
-            })
+            errors.append(problem(
+                "invalid_date",
+                f"The {field} date '{text}' is not a valid date. Use YYYY-MM-DD, such as 2026-01-31.",
+                field=field,
+            ))
 
     if not errors and dates["start"] > dates["end"]:
-        errors.append({
-            "code": "invalid_range",
-            "field": "start",
-            "message": f"The start date {dates['start']} is after the end date {dates['end']}.",
-        })
+        errors.append(problem(
+            "invalid_range",
+            f"The start date {dates['start']} is after the end date {dates['end']}.",
+            field="start",
+        ))
 
     return dates.get("start"), dates.get("end"), errors
 
@@ -97,8 +94,8 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
         """
         try:
             return load_ledger(ledger_path), []
-        except LedgerError as problem:
-            return None, problem.errors
+        except LedgerError as failure:
+            return None, failure.errors
 
     def statement_for_request(ledger, ledger_errors) -> tuple:
         """Returns (statement, errors, http_status) for the start and end in the query string."""
@@ -109,8 +106,8 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
             return None, errors, 400
         try:
             return income_statement(ledger, start, end), [], 200
-        except ControlTotalError as problem:
-            return None, [problem.error], 500
+        except ControlTotalError as failure:
+            return None, [failure.error], 500
 
     @app.get("/income-statement")
     def income_statement_api():
@@ -144,9 +141,9 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
         return page, status
 
     @app.errorhandler(HTTPException)
-    def http_error(problem):
+    def http_error(failure):
         """Unknown URLs, wrong methods and unexpected failures, in the same shape as every other error."""
-        code = problem.name.lower().replace(" ", "_")  # "Not Found" becomes "not_found"
-        return {"errors": [{"code": code, "message": problem.description}]}, problem.code
+        code = failure.name.lower().replace(" ", "_")  # "Not Found" becomes "not_found"
+        return {"errors": [problem(code, failure.description)]}, failure.code
 
     return app
