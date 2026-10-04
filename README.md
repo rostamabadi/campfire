@@ -13,6 +13,10 @@ command runs both.
 ./run_server.sh   # backend and frontend, on http://127.0.0.1:5001/
 ```
 
+`run_server.sh` asks which ledger file and which port to use. Press Enter twice for the
+original `ledger.json` on port 5001, or on the next free port if 5001 is taken. It prints
+the address it serves.
+
 `setup.sh` makes sure [uv](https://docs.astral.sh/uv/) is installed, lets it install Python
 3.14 and the packages into `.venv` in this folder, and downloads the browser for the
 end-to-end tests. It uses no sudo and does not edit your shell profile.
@@ -36,7 +40,7 @@ Port 5001 is used because Flask's default, 5000, is taken by AirPlay Receiver on
 ## Other ledgers to try
 
 `ledger.json` is clean, so three sample ledgers in `tests/data` hold the cases it does not.
-Open one in the browser on another port:
+`./run_server.sh` lists them and lets you pick one. To skip the questions, set the answers:
 
 ```
 LEDGER_FILE=tests/data/ledger_warnings.json PORT=5002 ./run_server.sh
