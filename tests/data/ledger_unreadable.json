@@ -1,0 +1,10 @@
+{
+  "company": "Cut Short Co",
+  "currency": "USD",
+  "accounts": [
+    {"number": "1000", "name": "Cash", "type": "asset", "subtype": "balance_sheet", "is_active": true},
+    {"number": "4000", "name": "Sales", "type": "revenue", "subtype": "operating_revenue", "is_active": true}
+  ],
+  "journal_entries": [
+    {"id": "JE-001", "date": "2026-01-05", "status": "posted", "memo": "The file stops in the middle of this entry", "lines": [
+      {"account": "1000", "debit": "100.00", "credit": "0.00"},

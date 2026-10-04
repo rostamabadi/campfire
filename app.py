@@ -1,5 +1,6 @@
 """The web app: GET /income-statement returns JSON, GET / renders the same statement as a page."""
 
+import os
 from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
@@ -95,7 +96,11 @@ def statement_json(statement: IncomeStatement) -> dict:
     }
 
 
-def create_app(ledger_path: str | Path = LEDGER_PATH) -> Flask:
+def create_app(ledger_path: str | Path | None = None) -> Flask:
+    """Build the app. The ledger is `ledger_path` if given, otherwise the file named by the
+    LEDGER_FILE environment variable, otherwise ledger.json."""
+    ledger_file = ledger_path or os.environ.get("LEDGER_FILE") or LEDGER_PATH
+
     app = Flask(__name__)
     app.json = OrderedJSONProvider(app)
     app.jinja_env.filters["accounting"] = accounting
@@ -108,7 +113,7 @@ def create_app(ledger_path: str | Path = LEDGER_PATH) -> Flask:
         problems instead of showing numbers that might be wrong.
         """
         try:
-            return load_ledger(ledger_path), []
+            return load_ledger(ledger_file), []
         except LedgerError as failure:
             return None, failure.errors
 

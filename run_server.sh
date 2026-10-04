@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run the app on http://127.0.0.1:5001/. Stop it with Ctrl+C.
-# Another port: PORT=5002 ./run_server.sh
+# Another port:   PORT=5002 ./run_server.sh
+# Another ledger: LEDGER_FILE=tests/data/ledger_warnings.json PORT=5002 ./run_server.sh
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -19,5 +20,6 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 1
 fi
 
+echo "Ledger: ${LEDGER_FILE:-ledger.json}"
 echo "Income statement: http://127.0.0.1:$PORT/"
 exec uv run flask --app app run --port "$PORT"
