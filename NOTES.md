@@ -43,19 +43,18 @@
 Claude Code helped read the brief, list the traps in the data, and write the code and tests.
 
 - **Float drift:** it assumed floats would visibly drift on this ledger. They do not, so a
-  float version would pass tests built on these figures. A `0.10 + 0.20` test covers it.
-- **A test expectation:** it expected 9 struck-out lines for Q1 and the page showed 10. A
-  recount by hand proved the page right.
+  `0.10 + 0.20` test covers it.
+- **A test expectation:** it expected 9 struck-out lines for Q1. The page showed 10, and a
+  recount by hand agreed with the page.
 - **A label:** its first warning box said "Not reflected in the totals", which is false for
   possible duplicates.
-- **A stale check:** it planted mistakes once, then added four rules without rerunning. A
-  review caught it, and the check is now a script.
-- **A commit that claimed too much:** two file writes failed without being noticed, and the
-  commit message described changes that were not in it. A follow-up made it true.
-- **Overruled:** it proposed blocking the statement on a bad draft, and hiding
-  out-of-range lines in the detail.
-- **Not trusted:** the tests passed on the first run, which proves little. That is why the
-  mistakes are planted on purpose.
+- **A stale check:** it planted mistakes once, then added four rules without rerunning. The
+  check is now a script.
+- **A commit that claimed too much:** two file writes failed unnoticed, so a commit message
+  described changes it did not contain. A follow-up fixed it.
+- **Overruled:** it proposed blocking the statement on a bad draft, and hiding out-of-range
+  lines in the detail.
+- **Not trusted:** tests that pass on the first run prove little, so mistakes are planted.
 
 ## Next
 
