@@ -51,8 +51,8 @@
 </div>
 {% endif %}
 
-{% macro section_rows(title, section, total_label) %}
-  <tr><th class="section" colspan="2">{{ title }}</th></tr>
+{% macro section_rows(section) %}
+  <tr><th class="section" colspan="2">{{ section.title }}</th></tr>
   {% for line in section.lines %}
   <tr>
     <td class="account">{{ line.account }} {{ line.name }}</td>
@@ -60,7 +60,7 @@
   </tr>
   {% endfor %}
   <tr class="subtotal">
-    <td>{{ total_label }}</td>
+    <td>{{ section.total_label }}</td>
     <td class="amount">{{ section.total | accounting }}</td>
   </tr>
 {% endmacro %}
@@ -72,10 +72,9 @@
   </tr>
 {% endmacro %}
 
-{# One section of the detail: a collapsible block per account with every journal line on it.
-   `plus` and `minus` name the section's formula, such as credits minus debits. #}
-{% macro detail_group(title, section, total_label, plus, minus) %}
-  <h4>{{ title }}</h4>
+{# One section of the detail: a collapsible block per account with every journal line on it. #}
+{% macro detail_group(section) %}
+  <h4>{{ section.title }}</h4>
   {% for line in section.lines %}
   <details class="account-detail">
     <summary>{{ line.account }} {{ line.name }}: {{ line.amount | accounting }}</summary>
@@ -97,7 +96,7 @@
       <tr><td colspan="6">No lines on this account.</td></tr>
       {% endfor %}
       <tr class="subtotal">
-        <td colspan="3">Counted totals, then {{ plus }} minus {{ minus }}</td>
+        <td colspan="3">Counted totals, then {{ "credits minus debits" if section.credit_normal else "debits minus credits" }}</td>
         <td class="amount">{{ line.debits | accounting }}</td>
         <td class="amount">{{ line.credits | accounting }}</td>
         <td class="amount">{{ line.amount | accounting }}</td>
@@ -105,7 +104,7 @@
     </table>
   </details>
   {% endfor %}
-  <p class="group-total">{{ total_label }}: {{ section.total | accounting }}</p>
+  <p class="group-total">{{ section.total_label }}: {{ section.total | accounting }}</p>
 {% endmacro %}
 
 {% if statement %}
@@ -124,12 +123,12 @@
 {% endif %}
 
 <table>
-  {{ section_rows("Revenue", statement.revenue, "Net revenue") }}
-  {{ section_rows("Cost of goods sold", statement.cost_of_goods_sold, "Total cost of goods sold") }}
+  {{ section_rows(statement.revenue) }}
+  {{ section_rows(statement.cost_of_goods_sold) }}
   {{ result_row("Gross profit", statement.gross_profit) }}
-  {{ section_rows("Operating expenses", statement.operating_expenses, "Total operating expenses") }}
+  {{ section_rows(statement.operating_expenses) }}
   {{ result_row("Operating income", statement.operating_income) }}
-  {{ section_rows("Other income", statement.other_income, "Total other income") }}
+  {{ section_rows(statement.other_income) }}
   {{ result_row("Net income", statement.net_income, "net") }}
 </table>
 
@@ -160,11 +159,9 @@
     dated inside the range. The others are struck out, with the reason. Open an account to
     add up its lines by hand.
   </p>
-  {{ detail_group("Revenue", statement.revenue, "Net revenue", "credits", "debits") }}
-  {{ detail_group("Cost of goods sold", statement.cost_of_goods_sold, "Total cost of goods sold", "debits", "credits") }}
-  {{ detail_group("Operating expenses", statement.operating_expenses, "Total operating expenses", "debits", "credits") }}
-  {{ detail_group("Other income", statement.other_income, "Total other income", "credits", "debits") }}
-  {{ detail_group("Balance-sheet accounts (the check)", statement.balance_sheet_movement, "Total movement", "debits", "credits") }}
+  {% for section in statement.sections + [statement.balance_sheet_movement] %}
+  {{ detail_group(section) }}
+  {% endfor %}
 </details>
 {% endif %}
 

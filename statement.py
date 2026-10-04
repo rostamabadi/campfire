@@ -40,6 +40,9 @@ class StatementLine:
 
 @dataclass(frozen=True)
 class Section:
+    title: str  # the heading, such as "Revenue"
+    total_label: str  # the label of the subtotal, such as "Net revenue"
+    credit_normal: bool  # True: lines are credits minus debits. False: debits minus credits
     lines: list[StatementLine]
     total: Decimal
 
@@ -59,6 +62,11 @@ class IncomeStatement:
     net_income: Decimal
     balance_sheet_movement: Section  # the control total: its total always equals net_income
     warnings: list[dict]
+
+    @property
+    def sections(self) -> list[Section]:
+        """The four sections of the statement, in the order they are shown."""
+        return [self.revenue, self.cost_of_goods_sold, self.operating_expenses, self.other_income]
 
 
 class ControlTotalError(Exception):
@@ -131,6 +139,8 @@ def build_section(
     debit_totals: dict[str, Decimal],
     credit_totals: dict[str, Decimal],
     lines_by_account: dict[str, list[DetailLine]],
+    title: str,
+    total_label: str,
     subtypes: list[str],
     credit_normal: bool,
 ) -> Section:
@@ -157,7 +167,7 @@ def build_section(
             ))
 
     total = sum((line.amount for line in lines), ZERO)
-    return Section(lines=lines, total=total)
+    return Section(title=title, total_label=total_label, credit_normal=credit_normal, lines=lines, total=total)
 
 
 def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
@@ -207,13 +217,19 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
 
     lines_by_account = detail_lines_by_account(ledger, start, end)
 
-    def section(subtypes: list[str], credit_normal: bool) -> Section:
-        return build_section(ledger, debit_totals, credit_totals, lines_by_account, subtypes, credit_normal)
+    def section(title: str, total_label: str, subtypes: list[str], credit_normal: bool) -> Section:
+        return build_section(
+            ledger, debit_totals, credit_totals, lines_by_account, title, total_label, subtypes, credit_normal
+        )
 
-    revenue = section(["operating_revenue", "contra_revenue"], credit_normal=True)
-    cost_of_goods_sold = section(["cogs"], credit_normal=False)
-    operating_expenses = section(["operating_expense"], credit_normal=False)
-    other_income = section(["other_income"], credit_normal=True)
+    # Each section is defined here, once: its heading, its subtotal label, the subtypes it
+    # holds in display order, and its sign. The page reads all of that from the section.
+    revenue = section("Revenue", "Net revenue", ["operating_revenue", "contra_revenue"], credit_normal=True)
+    cost_of_goods_sold = section("Cost of goods sold", "Total cost of goods sold", ["cogs"], credit_normal=False)
+    operating_expenses = section(
+        "Operating expenses", "Total operating expenses", ["operating_expense"], credit_normal=False
+    )
+    other_income = section("Other income", "Total other income", ["other_income"], credit_normal=True)
 
     gross_profit = revenue.total - cost_of_goods_sold.total
     operating_income = gross_profit - operating_expenses.total
@@ -222,7 +238,9 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     # The control total. Every entry balances, so the balance-sheet lines of the same entries
     # must net to the same amount as the income statement. If they do not, an account was
     # left out, counted twice or given the wrong sign, and no statement is returned.
-    balance_sheet_movement = section(["balance_sheet"], credit_normal=False)
+    balance_sheet_movement = section(
+        "Balance-sheet accounts", "Total movement", ["balance_sheet"], credit_normal=False
+    )
     if balance_sheet_movement.total != net_income:
         raise ControlTotalError({
             "code": "control_total_mismatch",
