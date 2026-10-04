@@ -59,15 +59,17 @@ Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, Playwright 1.63.0 with pyt
 | File | Role |
 | --- | --- |
 | `ledger.json` | The data, verbatim from the brief. |
-| `ledger.py` | Checks the raw data, then loads it into dataclasses with `Decimal` amounts. |
-| `statement.py` | Builds the statement: sums posted lines per account for the range, lays out sections and subtotals, runs the control total, finds warnings. |
+| `checks.py` | The checks on the raw data, and the two value parsers for amounts and dates. |
+| `ledger.py` | The data model as dataclasses with `Decimal` amounts, and loading it from the file. |
+| `statement.py` | Builds the statement: lists every line per account, sums the counted ones, lays out sections and subtotals, runs the control total, finds warnings. |
 | `app.py` | Flask routes, request validation, error responses, money formatting. |
 | `templates/statement.html` | The page: date form, errors, warnings, statement, check table, line detail. |
-| `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. `mutation_check.py` plants mistakes. |
+| `tests/` | pytest, in `unit`, `integration` and `e2e`. `builders.py` holds the shared helpers. `mutation_check.py` plants mistakes. |
 
 The path from the dates to the numbers: `app.py` `read_ledger` and `parse_range` →
-`statement.py` `income_statement` → `entries_in_range` → `account_totals` → `build_section`
-for each section → subtotals → control total → `statement_json` or the template.
+`statement.py` `income_statement` → `detail_lines_by_account` (which uses `entries_in_range`
+to decide what counts) → `build_section` for each section → subtotals → control total →
+`statement_json` or the template.
 
 ## Response
 
@@ -112,6 +114,18 @@ Errors always have one shape and list every problem found:
 {"errors": [{"code": "invalid_range", "field": "start", "message": "The start date 2026-04-01 is after the end date 2026-03-31."}]}
 ```
 
-A bad request returns 400. A problem in the ledger data that could change the totals
-returns 500 and no numbers. A problem in a draft or void entry cannot change them, so it is
-a warning on the statement instead.
+| Status | Codes | When |
+| --- | --- | --- |
+| 400 | `missing_parameter`, `invalid_date`, `invalid_range` | The request dates. Each names the `field`. |
+| 500 | `missing_field`, `unbalanced_entry`, `unknown_account`, `invalid_amount`, `invalid_line`, `too_few_lines`, `unknown_status`, `unknown_type`, `unknown_subtype`, `type_subtype_mismatch`, `invalid_date`, `duplicate_id` | A problem in the ledger data that could change the totals. Each names the `entry_id` or `account`. No numbers are returned. |
+| 500 | `unreadable_ledger` | The file is missing, is not JSON, or has the wrong structure. |
+| 500 | `control_total_mismatch` | Net income and the balance-sheet movement differ. |
+| 404, 405, 500 | `not_found`, `method_not_allowed`, `internal_server_error` | Everything else, in the same shape. |
+
+Warnings ride along with a successful statement and never change the totals:
+
+| Code | When |
+| --- | --- |
+| `draft_not_included` | A draft entry is dated inside the range. |
+| `possible_duplicate` | Two or more posted entries in the range have the same date and identical lines. All stay in the totals. |
+| a ledger check's code, such as `unbalanced_entry` | The problem is in a draft or void entry. That entry cannot change the totals, so it is left out and reported, whatever the range. |
