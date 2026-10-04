@@ -29,10 +29,10 @@ uv run pytest
 | --- | --- |
 | `ledger.json` | The data, verbatim from the brief. Never edit it. |
 | `ledger.py` | Check the raw data, collecting every problem, then load it into dataclasses (`Decimal`, `date`). |
-| `statement.py` | Pure functions: sum posted lines per account for a range, lay out sections and subtotals, find warnings. |
+| `statement.py` | Pure functions: sum posted lines per account for a range, lay out sections and subtotals, run the control total, find warnings. |
 | `app.py` | Flask routes, request validation, error responses, money formatting. |
-| `templates/statement.html` | Date form, errors, warnings, statement. |
-| `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. |
+| `templates/statement.html` | Date form, errors, warnings, statement, collapsed check table. |
+| `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. `mutation_check.py` plants mistakes to prove the tests catch them. |
 
 Routes: `GET /income-statement?start=YYYY-MM-DD&end=YYYY-MM-DD` returns JSON. `GET /`
 renders the HTML page from the same function.
@@ -64,7 +64,8 @@ debit balance comes out negative on its own (`"-800.25"` in JSON, `(800.25)` in 
 is listed after the operating revenue accounts. The Revenue subtotal is net of contra and
 labelled "Net revenue". There is no separate gross revenue subtotal.
 
-Within a subtype, lines are ordered by account number.
+Within a subtype, lines are ordered by account number, shorter numbers first, so that
+6000 comes before 10000.
 
 ## Money
 
@@ -103,8 +104,9 @@ negatives exist only in the HTML.
 
 `balance_sheet_movement` is the control total made visible: debits − credits per
 balance-sheet account for the same entries, every account listed. Its total always equals
-`net_income`. The page shows it in a "Check" table under the statement, collapsed until clicked. It is the movement
-over the range, not a balance sheet: there are no balances as of a date.
+`net_income`. The page shows it in a "Check" table under the statement, collapsed until
+clicked. It is the movement over the range, not a balance sheet: there are no balances as
+of a date.
 
 ## Errors
 
@@ -116,18 +118,28 @@ Every error response has one shape, and reports every problem found, not only th
 
 - **Request errors, HTTP 400.** `missing_parameter`, `invalid_date`, `invalid_range`. Each
   names the `field`.
-- **Ledger errors, HTTP 500.** The ledger is checked once at startup. The app still starts,
-  and every statement request returns the full list instead of numbers. No partial
-  statements. Checks: `unbalanced_entry`, `unknown_account`, `invalid_amount` (not a decimal
-  string, negative, more than two decimals), `invalid_line` (debit and credit both
-  non-zero), `too_few_lines` (fewer than two), `unknown_status`, `unknown_type`, `unknown_subtype`, `type_subtype_mismatch`,
-  `invalid_date`, `duplicate_id`. Each names the `entry_id` or `account`.
+- **Ledger errors, HTTP 500.** The ledger file is read and checked on every request, so an
+  edit shows up without a restart. With a blocking problem, the response is the full list
+  instead of numbers. No partial statements. Checks: `missing_field`, `unbalanced_entry`,
+  `unknown_account`, `invalid_amount` (not a decimal string, negative, more than two
+  decimals, or 10^15 and above), `invalid_line` (debit and credit both non-zero),
+  `too_few_lines` (fewer than two), `unknown_status`, `unknown_type`, `unknown_subtype`,
+  `type_subtype_mismatch`, `invalid_date`, `duplicate_id`. Each names the `entry_id` or
+  `account`. The memo is optional.
+- **What blocks.** A problem blocks when it could change the totals: any problem in the
+  chart of accounts, in a `posted` entry, or in an entry whose status is missing or unknown.
+  A problem in a `draft` or `void` entry is a warning, and that entry is left out of the
+  ledger.
 - **Type and subtype must agree.** Asset, liability and equity accounts are `balance_sheet`.
   Revenue accounts are `operating_revenue`, `contra_revenue` or `other_income`. Expense
   accounts are `cogs`, `operating_expense` or `other_income`. Without this check a
   misfiled account would drop off the statement, or onto it, without any sign.
-- The checks apply to every entry, whatever its status. A file
-  that is missing, not JSON, or missing a field is one `unreadable_ledger` error.
+- A file that is missing, not JSON, or has the wrong top-level structure is one
+  `unreadable_ledger` error.
+- **Amounts stay exact.** Decimal sums are exact up to 28 significant digits. The 10^15
+  limit on each amount keeps every total far below that.
+- **Everything else, same shape.** An unknown URL is `not_found` (404), a wrong method is
+  `method_not_allowed` (405), an unexpected failure is `internal_server_error` (500).
 - **Control total, HTTP 500.** On every request, net income must equal the net movement
   (debits − credits) in balance-sheet accounts for the same posted entries. Every entry
   balances, so the two can only differ if the code left an account out, counted it twice or
@@ -136,24 +148,29 @@ Every error response has one shape, and reports every problem found, not only th
   or status filter.
 - Messages are written for an accountant: they name the entry, the accounts and the amounts.
 - The HTML page shows the same messages above the statement, with the same status code.
-- `GET /` with no query string is a first visit: form only, no error.
+- `GET /` with no query string is a first visit. It redirects to the whole ledger, from the
+  first posted entry to the last. With nothing posted it shows only the form.
 - A valid range with no activity is not an error. It is a statement of zeros.
 
 ## Warnings
 
 Warnings do not change the totals. They ride along with a successful statement in
-`warnings`, and the page shows them in a box above the statement. Only entries dated inside
-the requested range are considered.
+`warnings`, and the page shows them in a box above the statement. Every warning has a
+`code` and a `message`.
 
 ```json
 {"code": "draft_not_included", "entry_ids": ["JE-019"], "date": "2026-03-15",
+ "memo": "Q1 bonus accrual (pending approval)", "amount": "5000.00",
  "message": "JE-019 (2026-03-15, Q1 bonus accrual (pending approval), 5,000.00) is a draft and is not included in the totals."}
 ```
 
-- **`draft_not_included`**: one per draft entry in the range. Void entries are not reported:
-  they are cancelled and can no longer change the statement.
-- **`possible_duplicate`**: two or more `posted` entries with the same date and identical
-  lines. They cannot be proven duplicates from the data, so all stay in the totals, as
+- **`draft_not_included`**: one per draft entry dated in the range. Void entries are not
+  reported: they are cancelled and can no longer change the statement.
+- **Problems in draft and void entries**: the ledger check's own code, such as
+  `unbalanced_entry`, with the `entry_id`. These are shown on every statement, whatever the
+  range, because the entry may have no usable date.
+- **`possible_duplicate`**: two or more `posted` entries dated in the range with the same
+  date and identical lines. They cannot be proven duplicates from the data, so all stay in the totals, as
   recorded. Nothing is dropped automatically. A posted entry whose twin is `void` raises
   nothing: the void is the fix (JE-009, JE-010).
 - Duplicate detection is deliberately minimal (exact match, same date). Improving it is
@@ -189,10 +206,12 @@ Net income by month: January (21,529.65), February (13,230.25), March (9,720.24)
   allowing a subtype that no section uses.
 - Each ledger check and each request error, through the Flask test client.
 - Expected values are worked out by hand, never copied from the app's output.
+- `uv run python tests/mutation_check.py` plants one mistake at a time in a copy of the
+  project and confirms the tests fail. Add a mistake there when a new rule is added.
 
 ## Working agreements
 
-- Commit after each working step, in small commits, on `main`. Push only when asked.
+- Commit after each working step, in small commits, on `main`, and push each one.
 - When a data assumption is made, add it to `NOTES.md` (one page at most).
 - When AI output turns out wrong or is corrected, add a line to the AI log in `NOTES.md`.
 - Deliverables: `README.md` (run commands and versions), `NOTES.md`, code and tests.

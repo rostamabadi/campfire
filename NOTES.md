@@ -11,7 +11,7 @@
   the range is shown as a note: approving JE-019 would move Q1 to (49,480.14).
 - **Both end dates are included.** Plain dates, no time zone.
 - **The section comes from the subtype, not the type.** Interest Income has type `revenue`
-  but sits under Other income.
+  but sits under Other income. An expense account may sit there too, as a negative line.
 - **One sign formula per section.** Income is credits minus debits, costs are debits minus
   credits. Contra revenue comes out negative with no special case, and the JE-020 vendor
   credit reduces Software to 1,099.97.
@@ -20,10 +20,10 @@
 - **Every income-statement account has a line**, 0.00 when it has no activity.
 - **Money is `Decimal`, read from the strings**, and a string in the JSON. An amount given as
   a JSON number is rejected.
-- **Bad data blocks the statement.** An unbalanced entry, fewer than two lines, unknown
-  account, invalid amount or date, unknown status, type or subtype, or reused id returns 500
-  listing every problem, on the page too. So does a type and subtype that disagree: a
-  `revenue` account filed as `balance_sheet` would drop off the statement without any sign.
+- **Bad data blocks the statement only when it could change the totals.** A problem in the
+  chart of accounts or in a posted entry returns 500 listing every problem, on the page too:
+  unbalanced, unknown account, invalid amount or date, a type and subtype that disagree. The
+  same problem in a draft or void entry is only a note, since it never reaches the totals.
 - **Possible duplicates are flagged, not removed.** Two posted entries with the same date
   and identical lines stay in the totals, since it cannot be proven from the data. JE-009
   and JE-010 raise nothing because JE-009 is already void.
@@ -37,9 +37,8 @@
   balance-sheet accounts (the other half of each entry), and adjacent ranges add up.
 - The app repeats the first one on every request and shows the movement under the
   statement. A mismatch returns an error, not numbers.
-- Twelve rules were broken one at a time, such as counting drafts, an exclusive end date,
-  dropping inactive accounts and `abs()` on contra. Every one made tests fail.
-- The running app's page and JSON were compared with the hand-worked figures.
+- `tests/mutation_check.py` plants 19 mistakes one at a time, such as counting drafts, an
+  exclusive end date or `abs()` on contra. The tests fail for every one.
 
 ## Where AI helped, and where it was wrong
 
@@ -51,7 +50,7 @@ Claude Code helped read the brief, list the traps in the data, and write the cod
 - **Wrong:** its first page titled the warning box "Not reflected in the totals", which is
   false for possible duplicates, since those are included.
 - **Not trusted:** the tests passed on the first run, which proves little. That is why the
-  rules were broken on purpose.
+  mistakes are planted on purpose.
 
 ## Next
 

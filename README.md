@@ -16,16 +16,22 @@ uv sync
 uv run flask --app app run --port 5001
 ```
 
-- Page: http://127.0.0.1:5001/
+- Page: http://127.0.0.1:5001/ opens on the whole ledger, from the first posted entry to
+  the last. Change the dates to see any other range.
 - API: http://127.0.0.1:5001/income-statement?start=2026-01-01&end=2026-03-31
 
 Port 5001 is used because Flask's default, 5000, is taken by AirPlay Receiver on macOS.
+`ledger.json` is read on every request, so an edit to it shows up without a restart.
 
 ## Test
 
 ```
 uv run pytest
+uv run python tests/mutation_check.py
 ```
+
+The second command plants 19 mistakes, one at a time, in a temporary copy of the project
+and confirms that the tests fail for each. It takes a few seconds.
 
 ## Versions
 
@@ -37,14 +43,14 @@ Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, on macOS 26.6.2.
 | --- | --- |
 | `ledger.json` | The data, verbatim from the brief. |
 | `ledger.py` | Checks the raw data, then loads it into dataclasses with `Decimal` amounts. |
-| `statement.py` | Builds the statement: sums posted lines per account for the range, lays out sections and subtotals, finds warnings. |
+| `statement.py` | Builds the statement: sums posted lines per account for the range, lays out sections and subtotals, runs the control total, finds warnings. |
 | `app.py` | Flask routes, request validation, error responses, money formatting. |
-| `templates/statement.html` | The page: date form, errors, warnings, statement. |
-| `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. |
+| `templates/statement.html` | The page: date form, errors, warnings, statement, check table. |
+| `tests/` | pytest. `builders.py` builds small ledgers in the `ledger.json` shape. `mutation_check.py` plants mistakes. |
 
-The path from the dates to the numbers: `app.py` `parse_range` → `statement.py`
-`income_statement` → `entries_in_range` → `account_totals` → `build_section` for each
-section → subtotals → `statement_json` or the template.
+The path from the dates to the numbers: `app.py` `read_ledger` and `parse_range` →
+`statement.py` `income_statement` → `entries_in_range` → `account_totals` → `build_section`
+for each section → subtotals → control total → `statement_json` or the template.
 
 ## Response
 
@@ -73,7 +79,8 @@ range. Amounts are decimal strings, never JSON numbers. A negative amount has a 
   "net_income": "-44480.14",
   "balance_sheet_movement": {"lines": ["..."], "total": "-44480.14"},
   "warnings": [
-    {"code": "draft_not_included", "entry_ids": ["JE-019"], "date": "2026-03-15", "message": "..."}
+    {"code": "draft_not_included", "entry_ids": ["JE-019"], "date": "2026-03-15",
+     "memo": "Q1 bonus accrual (pending approval)", "amount": "5000.00", "message": "..."}
   ]
 }
 ```
@@ -88,4 +95,6 @@ Errors always have one shape and list every problem found:
 {"errors": [{"code": "invalid_range", "field": "start", "message": "The start date 2026-04-01 is after the end date 2026-03-31."}]}
 ```
 
-A bad request returns 400. A problem in the ledger data returns 500 and no numbers.
+A bad request returns 400. A problem in the ledger data that could change the totals
+returns 500 and no numbers. A problem in a draft or void entry cannot change them, so it is
+a warning on the statement instead.
