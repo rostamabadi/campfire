@@ -40,6 +40,16 @@ def all_amounts(statement):
     }
 
 
+def every_section(statement):
+    return [
+        statement.revenue,
+        statement.cost_of_goods_sold,
+        statement.operating_expenses,
+        statement.other_income,
+        statement.balance_sheet_movement,
+    ]
+
+
 def statement_of(*entries, start="2026-01-01", end="2026-12-31", accounts=CHART):
     ledger = parse_ledger(ledger_data(*entries, accounts=accounts))
     return income_statement(ledger, day(start), day(end))
@@ -93,6 +103,82 @@ def test_q1_2026_balance_sheet_movement(real_ledger):
     }
     assert statement.balance_sheet_movement.total == D("-44480.14")
     assert statement.balance_sheet_movement.total == statement.net_income
+
+
+# --- the detail: every journal line under its account ---
+
+def detail_of(section, account_number):
+    """(entry id, debit, credit, reason) for each line listed under the account. Empty reason means counted."""
+    (line,) = [line for line in section.lines if line.account == account_number]
+    return [(item.entry_id, item.debit, item.credit, item.reason) for item in line.detail]
+
+
+def test_q1_2026_detail_for_product_revenue(real_ledger):
+    statement = income_statement(real_ledger, day("2026-01-01"), day("2026-03-31"))
+
+    # Every line on account 4000 in ledger.json, oldest first.
+    assert detail_of(statement.revenue, "4000") == [
+        ("JE-001", D("0.00"), D("5000.00"), "outside the range"),   # 2025-12-15
+        ("JE-002", D("0.00"), D("12450.75"), ""),
+        ("JE-009", D("0.00"), D("8200.00"), "void"),
+        ("JE-010", D("0.00"), D("8200.00"), ""),
+        ("JE-016", D("0.00"), D("15000.00"), ""),
+        ("JE-024", D("0.00"), D("9100.00"), "outside the range"),   # 2026-04-01
+    ]
+    (line,) = [line for line in statement.revenue.lines if line.account == "4000"]
+    assert (line.debits, line.credits) == (D("0.00"), D("35650.75"))  # 12,450.75 + 8,200.00 + 15,000.00
+
+
+def test_q1_2026_detail_for_salaries_shows_the_draft(real_ledger):
+    statement = income_statement(real_ledger, day("2026-01-01"), day("2026-03-31"))
+
+    assert detail_of(statement.operating_expenses, "6000") == [
+        ("JE-006", D("18500.00"), D("0.00"), ""),
+        ("JE-015", D("18500.00"), D("0.00"), ""),
+        ("JE-019", D("5000.00"), D("0.00"), "draft"),
+        ("JE-022", D("18500.00"), D("0.00"), ""),
+    ]
+
+
+def test_detail_marks_counted_only_when_there_is_no_reason(real_ledger):
+    statement = income_statement(real_ledger, day("2026-01-01"), day("2026-03-31"))
+
+    for section in every_section(statement):
+        for line in section.lines:
+            for item in line.detail:
+                assert item.counted == (item.reason == "")
+
+
+def test_a_void_entry_outside_the_range_is_reported_as_void(real_ledger):
+    # JE-009 is void and dated 2026-02-03. For a January statement both reasons apply. Status wins.
+    statement = income_statement(real_ledger, day("2026-01-01"), day("2026-01-31"))
+
+    reasons = {entry_id: reason for entry_id, _, _, reason in detail_of(statement.revenue, "4000")}
+
+    assert reasons["JE-009"] == "void"
+    assert reasons["JE-010"] == "outside the range"
+
+
+def test_every_ledger_line_is_listed_exactly_once(real_ledger):
+    statement = income_statement(real_ledger, day("2026-01-01"), day("2026-03-31"))
+
+    listed = sum(len(line.detail) for section in every_section(statement) for line in section.lines)
+
+    assert listed == sum(len(entry.lines) for entry in real_ledger.entries) == 51
+
+
+def test_the_counted_lines_listed_add_up_to_the_amounts_shown(real_ledger):
+    """What a reader adds up by hand from the detail must be what the statement shows."""
+    days = sorted({entry.date for entry in real_ledger.entries})
+
+    for start, end in combinations(days, 2):
+        statement = income_statement(real_ledger, start, end)
+        for section in every_section(statement):
+            for line in section.lines:
+                counted_debits = sum((item.debit for item in line.detail if item.counted), D("0.00"))
+                counted_credits = sum((item.credit for item in line.detail if item.counted), D("0.00"))
+                assert (counted_debits, counted_credits) == (line.debits, line.credits), (start, end, line.account)
+                assert abs(line.amount) == abs(counted_credits - counted_debits), (start, end, line.account)
 
 
 @pytest.mark.parametrize(

@@ -17,10 +17,25 @@ ZERO = Decimal("0.00")
 
 
 @dataclass(frozen=True)
+class DetailLine:
+    """One journal line, as listed under its account in the detail."""
+    date: date
+    entry_id: str
+    memo: str
+    debit: Decimal
+    credit: Decimal
+    counted: bool
+    reason: str  # why it is not counted: "void", "draft" or "outside the range". Empty when counted
+
+
+@dataclass(frozen=True)
 class StatementLine:
     account: str  # account number
     name: str
     amount: Decimal
+    debits: Decimal  # total of the counted debits
+    credits: Decimal  # total of the counted credits
+    detail: list[DetailLine]  # every line in the ledger on this account, counted or not
 
 
 @dataclass(frozen=True)
@@ -81,10 +96,41 @@ def account_totals(entries: list[Entry]) -> tuple[dict[str, Decimal], dict[str, 
     return debit_totals, credit_totals
 
 
+def detail_lines_by_account(ledger: Ledger, start: date, end: date) -> dict[str, list[DetailLine]]:
+    """Every journal line in the ledger, grouped by account number, oldest first.
+
+    Each line records whether it counts toward the range and, if not, why not. This is what
+    the page lists under each account, so that a reader can redo the sums by hand.
+    """
+    counted_ids = {entry.id for entry in entries_in_range(ledger, start, end, "posted")}
+
+    lines_by_account = {}
+    for entry in sorted(ledger.entries, key=lambda entry: entry.date):
+        if entry.id in counted_ids:
+            reason = ""
+        elif entry.status != "posted":
+            reason = entry.status  # "draft" or "void"
+        else:
+            reason = "outside the range"
+
+        for line in entry.lines:
+            lines_by_account.setdefault(line.account, []).append(DetailLine(
+                date=entry.date,
+                entry_id=entry.id,
+                memo=entry.memo,
+                debit=line.debit,
+                credit=line.credit,
+                counted=reason == "",
+                reason=reason,
+            ))
+    return lines_by_account
+
+
 def build_section(
     ledger: Ledger,
     debit_totals: dict[str, Decimal],
     credit_totals: dict[str, Decimal],
+    lines_by_account: dict[str, list[DetailLine]],
     subtypes: list[str],
     credit_normal: bool,
 ) -> Section:
@@ -101,7 +147,14 @@ def build_section(
             debits = debit_totals.get(account.number, ZERO)
             credits = credit_totals.get(account.number, ZERO)
             amount = credits - debits if credit_normal else debits - credits
-            lines.append(StatementLine(account=account.number, name=account.name, amount=amount))
+            lines.append(StatementLine(
+                account=account.number,
+                name=account.name,
+                amount=amount,
+                debits=debits,
+                credits=credits,
+                detail=lines_by_account.get(account.number, []),
+            ))
 
     total = sum((line.amount for line in lines), ZERO)
     return Section(lines=lines, total=total)
@@ -152,14 +205,15 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     posted = entries_in_range(ledger, start, end, "posted")
     debit_totals, credit_totals = account_totals(posted)
 
-    revenue = build_section(
-        ledger, debit_totals, credit_totals, ["operating_revenue", "contra_revenue"], credit_normal=True
-    )
-    cost_of_goods_sold = build_section(ledger, debit_totals, credit_totals, ["cogs"], credit_normal=False)
-    operating_expenses = build_section(
-        ledger, debit_totals, credit_totals, ["operating_expense"], credit_normal=False
-    )
-    other_income = build_section(ledger, debit_totals, credit_totals, ["other_income"], credit_normal=True)
+    lines_by_account = detail_lines_by_account(ledger, start, end)
+
+    def section(subtypes: list[str], credit_normal: bool) -> Section:
+        return build_section(ledger, debit_totals, credit_totals, lines_by_account, subtypes, credit_normal)
+
+    revenue = section(["operating_revenue", "contra_revenue"], credit_normal=True)
+    cost_of_goods_sold = section(["cogs"], credit_normal=False)
+    operating_expenses = section(["operating_expense"], credit_normal=False)
+    other_income = section(["other_income"], credit_normal=True)
 
     gross_profit = revenue.total - cost_of_goods_sold.total
     operating_income = gross_profit - operating_expenses.total
@@ -168,9 +222,7 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     # The control total. Every entry balances, so the balance-sheet lines of the same entries
     # must net to the same amount as the income statement. If they do not, an account was
     # left out, counted twice or given the wrong sign, and no statement is returned.
-    balance_sheet_movement = build_section(
-        ledger, debit_totals, credit_totals, ["balance_sheet"], credit_normal=False
-    )
+    balance_sheet_movement = section(["balance_sheet"], credit_normal=False)
     if balance_sheet_movement.total != net_income:
         raise ControlTotalError({
             "code": "control_total_mismatch",
