@@ -1,0 +1,33 @@
+{
+  "company": "Blocking Errors Co",
+  "currency": "USD",
+  "accounts": [
+    {"number": "1000", "name": "Cash", "type": "asset", "subtype": "balance_sheet", "is_active": true},
+    {"number": "1100", "name": "Accounts Receivable", "type": "asset", "subtype": "balance_sheet", "is_active": true},
+    {"number": "2000", "name": "Accounts Payable", "type": "liability", "subtype": "balance_sheet", "is_active": true},
+    {"number": "4000", "name": "Sales", "type": "revenue", "subtype": "operating_revenue", "is_active": true},
+    {"number": "6000", "name": "Rent", "type": "expense", "subtype": "operating_expense", "is_active": true},
+    {"number": "4000", "name": "Sales (same number again)", "type": "revenue", "subtype": "operating_revenue", "is_active": true},
+    {"number": "5000", "name": "Cost of Goods Sold", "type": "cost", "subtype": "cogs", "is_active": true},
+    {"number": "6100", "name": "Travel", "type": "expense", "subtype": "travel", "is_active": true},
+    {"number": "4500", "name": "Revenue filed as balance sheet", "type": "revenue", "subtype": "balance_sheet", "is_active": true},
+    {"number": "7000", "name": "Half an account"}
+  ],
+  "journal_entries": [
+    {"id": "JE-101", "date": "2026-01-05", "status": "posted", "memo": "A sound entry", "lines": [{"account": "1100", "debit": "100.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "100.00"}]},
+    {"id": "JE-102", "date": "2026-01-06", "status": "posted", "memo": "Does not balance", "lines": [{"account": "1100", "debit": "100.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "90.00"}]},
+    {"id": "JE-103", "date": "2026-01-07", "status": "posted", "memo": "Account that does not exist", "lines": [{"account": "9999", "debit": "50.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "50.00"}]},
+    {"id": "JE-104", "date": "2026-01-08", "status": "posted", "memo": "Five amounts that are not valid money", "lines": [{"account": "1100", "debit": "abc", "credit": "0.00"}, {"account": "1100", "debit": "-5.00", "credit": "0.00"}, {"account": "1100", "debit": "1.005", "credit": "0.00"}, {"account": "1100", "debit": 100.0, "credit": "0.00"}, {"account": "1100", "debit": "1000000000000000.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "10.00"}]},
+    {"id": "JE-105", "date": "2026-01-09", "status": "posted", "memo": "A line with both a debit and a credit", "lines": [{"account": "1100", "debit": "100.00", "credit": "100.00"}, {"account": "1100", "debit": "20.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "20.00"}]},
+    {"id": "JE-106", "date": "2026-01-10", "status": "posted", "memo": "Only one line", "lines": [{"account": "1100", "debit": "10.00", "credit": "0.00"}]},
+    {"id": "JE-107", "date": "2026-01-11", "status": "posted", "memo": "No lines at all", "lines": []},
+    {"id": "JE-108", "date": "2026-01-12", "status": "pending", "memo": "A status that does not exist", "lines": [{"account": "1100", "debit": "10.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "10.00"}]},
+    {"id": "JE-109", "date": "2026-02-30", "status": "posted", "memo": "A day that does not exist", "lines": [{"account": "1100", "debit": "10.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "10.00"}]},
+    {"id": "JE-110", "date": "03/15/2026", "status": "posted", "memo": "A date in the wrong format", "lines": [{"account": "1100", "debit": "10.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "10.00"}]},
+    {"id": "JE-101", "date": "2026-01-20", "status": "posted", "memo": "Reuses the id JE-101", "lines": [{"account": "1100", "debit": "30.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "30.00"}]},
+    {"id": "JE-111", "status": "posted", "memo": "No date and no lines"},
+    {"id": "JE-112", "date": "2026-01-21", "status": "posted", "memo": "A line without a credit field", "lines": [{"account": "1100", "debit": "10.00"}, {"account": "4000", "debit": "0.00", "credit": "10.00"}]},
+    {"id": "JE-113", "date": "2026-01-22", "memo": "No status", "lines": [{"account": "1100", "debit": "10.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "10.00"}]},
+    {"date": "2026-01-23", "status": "posted", "memo": "No id", "lines": [{"account": "1100", "debit": "10.00", "credit": "0.00"}, {"account": "4000", "debit": "0.00", "credit": "10.00"}]}
+  ]
+}
