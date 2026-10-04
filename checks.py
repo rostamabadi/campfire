@@ -32,12 +32,12 @@ SUBTYPES_BY_TYPE = {
 AMOUNT_LIMIT = Decimal("1000000000000000")
 
 
-def problem(code: str, message: str, **where) -> dict:
+def problem(code: str, message: str, **where: object) -> dict:
     """One problem: a code, where it is (such as entry_id="JE-001"), and a message."""
     return {"code": code, **where, "message": message}
 
 
-def parse_date(text) -> date | None:
+def parse_date(text: object) -> date | None:
     """Return the date for a strict YYYY-MM-DD string, or None if it is not one."""
     if not isinstance(text, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
         return None
@@ -47,7 +47,7 @@ def parse_date(text) -> date | None:
         return None
 
 
-def parse_amount(text) -> Decimal | None:
+def parse_amount(text: object) -> Decimal | None:
     """Return the amount for a decimal string, or None if it is not valid money.
 
     Valid money is a string (a JSON number would already have become a float), zero or
@@ -61,7 +61,7 @@ def parse_amount(text) -> Decimal | None:
         return None
     if not amount.is_finite() or amount < 0 or amount >= AMOUNT_LIMIT:
         return None
-    if amount.as_tuple().exponent < -2:
+    if amount != amount.quantize(Decimal("0.01")):  # more than two decimal places
         return None
     return amount
 

@@ -1,16 +1,26 @@
 """The web app: GET /income-statement returns JSON, GET / renders the same statement as a page."""
 
+from collections.abc import Mapping
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 from flask import Flask, redirect, render_template, request, url_for
+from flask.json.provider import DefaultJSONProvider
+from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
 from checks import parse_date, problem
-from ledger import LedgerError, load_ledger
+from ledger import Ledger, LedgerError, load_ledger
 from statement import ControlTotalError, IncomeStatement, Section, income_statement, posted_date_span
 
 LEDGER_PATH = Path(__file__).with_name("ledger.json")
+
+
+class OrderedJSONProvider(DefaultJSONProvider):
+    """Flask's JSON writer, keeping the statement's order instead of sorting the keys."""
+
+    sort_keys = False
 
 
 def money(amount: Decimal) -> str:
@@ -25,22 +35,27 @@ def accounting(amount: Decimal) -> str:
     return f"{amount:,.2f}"
 
 
-def parse_range(args) -> tuple:
-    """Read start and end from the query string. Returns (start, end, errors)."""
+def parse_range(args: Mapping[str, str]) -> tuple[date | None, date | None, list[dict]]:
+    """Read start and end from the query string. Returns (start, end, errors).
+
+    When there are errors, a date that could not be read is None.
+    """
     errors = []
-    dates = {}
+    dates: dict[str, date] = {}
     for field in ("start", "end"):
         text = args.get(field, "").strip()
         if not text:
             errors.append(problem("missing_parameter", f"The {field} date is required, as YYYY-MM-DD.", field=field))
             continue
-        dates[field] = parse_date(text)
-        if dates[field] is None:
+        parsed = parse_date(text)
+        if parsed is None:
             errors.append(problem(
                 "invalid_date",
                 f"The {field} date '{text}' is not a valid date. Use YYYY-MM-DD, such as 2026-01-31.",
                 field=field,
             ))
+            continue
+        dates[field] = parsed
 
     if not errors and dates["start"] > dates["end"]:
         errors.append(problem(
@@ -80,12 +95,12 @@ def statement_json(statement: IncomeStatement) -> dict:
     }
 
 
-def create_app(ledger_path=LEDGER_PATH) -> Flask:
+def create_app(ledger_path: str | Path = LEDGER_PATH) -> Flask:
     app = Flask(__name__)
-    app.json.sort_keys = False  # keep the statement's order in the JSON
+    app.json = OrderedJSONProvider(app)
     app.jinja_env.filters["accounting"] = accounting
 
-    def read_ledger() -> tuple:
+    def read_ledger() -> tuple[Ledger | None, list[dict]]:
         """Returns (ledger, errors). The file is read on every request, so an edit to it shows
         up without a restart. It is small. A real system would query a database here.
 
@@ -97,12 +112,14 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
         except LedgerError as failure:
             return None, failure.errors
 
-    def statement_for_request(ledger, ledger_errors) -> tuple:
+    def statement_for_request(
+        ledger: Ledger | None, ledger_errors: list[dict]
+    ) -> tuple[IncomeStatement | None, list[dict], int]:
         """Returns (statement, errors, http_status) for the start and end in the query string."""
-        if ledger_errors:
+        if ledger is None:
             return None, ledger_errors, 500
         start, end, errors = parse_range(request.args)
-        if errors:
+        if errors or start is None or end is None:
             return None, errors, 400
         try:
             return income_statement(ledger, start, end), [], 200
@@ -110,20 +127,20 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
             return None, [failure.error], 500
 
     @app.get("/income-statement")
-    def income_statement_api():
+    def income_statement_api() -> ResponseReturnValue:
         ledger, ledger_errors = read_ledger()
         statement, errors, status = statement_for_request(ledger, ledger_errors)
-        if errors:
+        if statement is None:
             return {"errors": errors}, status
         return statement_json(statement)
 
     @app.get("/")
-    def income_statement_page():
+    def income_statement_page() -> ResponseReturnValue:
         ledger, ledger_errors = read_ledger()
 
         # With no query string this is a first visit. Go to the whole ledger, from its first
         # posted entry to its last. If nothing is posted yet, show only the form.
-        if not request.args and not ledger_errors:
+        if not request.args and ledger is not None:
             span = posted_date_span(ledger)
             if span is None:
                 return render_template("statement.html", statement=None, errors=[], start="", end="")
@@ -141,9 +158,9 @@ def create_app(ledger_path=LEDGER_PATH) -> Flask:
         return page, status
 
     @app.errorhandler(HTTPException)
-    def http_error(failure):
+    def http_error(failure: HTTPException) -> ResponseReturnValue:
         """Unknown URLs, wrong methods and unexpected failures, in the same shape as every other error."""
         code = failure.name.lower().replace(" ", "_")  # "Not Found" becomes "not_found"
-        return {"errors": [problem(code, failure.description)]}, failure.code
+        return {"errors": [problem(code, failure.description or failure.name)]}, failure.code or 500
 
     return app

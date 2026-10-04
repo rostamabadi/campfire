@@ -8,8 +8,9 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
-from checks import find_account_errors, find_entry_problems, parse_amount, parse_date, problem
+from checks import find_account_errors, find_entry_problems, problem
 
 
 @dataclass(frozen=True)
@@ -55,18 +56,22 @@ class LedgerError(Exception):
 
 
 def build_entry(raw: dict) -> Entry:
-    """Build an Entry from raw data that has passed the checks. The memo is optional."""
+    """Build an Entry from raw data that has passed the checks. The memo is optional.
+
+    The checks have already proved that the amounts and the date can be read, so they are
+    converted directly here.
+    """
     lines = [
         Line(
             account=raw_line["account"],
-            debit=parse_amount(raw_line["debit"]),
-            credit=parse_amount(raw_line["credit"]),
+            debit=Decimal(raw_line["debit"]),
+            credit=Decimal(raw_line["credit"]),
         )
         for raw_line in raw["lines"]
     ]
     return Entry(
         id=raw["id"],
-        date=parse_date(raw["date"]),
+        date=date.fromisoformat(raw["date"]),
         status=raw["status"],
         memo=raw.get("memo", ""),
         lines=lines,
@@ -86,7 +91,7 @@ def parse_ledger(data: dict) -> Ledger:
 
     warnings = []
     entries = []
-    seen_ids = set()
+    seen_ids: set[str] = set()
     for position, raw in enumerate(data["journal_entries"], start=1):
         problems = find_entry_problems(raw, position, account_numbers, seen_ids)
         if "id" in raw:
@@ -124,7 +129,7 @@ def parse_ledger(data: dict) -> Ledger:
     )
 
 
-def load_ledger(path) -> Ledger:
+def load_ledger(path: str | Path) -> Ledger:
     """Read and check the ledger file. Raises LedgerError if it is unreadable or has problems."""
     try:
         with open(path) as file:

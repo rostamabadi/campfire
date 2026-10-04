@@ -103,7 +103,7 @@ def detail_lines_by_account(ledger: Ledger, start: date, end: date) -> dict[str,
     """
     counted_ids = {entry.id for entry in entries_in_range(ledger, start, end, "posted")}
 
-    lines_by_account = {}
+    lines_by_account: dict[str, list[DetailLine]] = {}
     for entry in sorted(ledger.entries, key=lambda entry: entry.date):
         if entry.id in counted_ids:
             reason = ""
@@ -180,7 +180,7 @@ def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
 
     # Posted entries with the same date and identical lines may have been entered twice.
     # That cannot be proven from the data, so they stay in the totals, as recorded.
-    ids_by_content = {}
+    ids_by_content: dict[tuple, list[str]] = {}
     for entry in entries_in_range(ledger, start, end, "posted"):
         lines = sorted((line.account, line.debit, line.credit) for line in entry.lines)
         content = (entry.date, tuple(lines))
