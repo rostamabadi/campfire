@@ -33,6 +33,21 @@ uv run flask --app app run --port 5001
 Port 5001 is used because Flask's default, 5000, is taken by AirPlay Receiver on macOS.
 `ledger.json` is read on every request, so an edit to it shows up without a restart.
 
+## Other ledgers to try
+
+`ledger.json` is clean, so three sample ledgers in `tests/data` hold the cases it does not.
+Open one in the browser on another port:
+
+```
+LEDGER_FILE=tests/data/ledger_warnings.json PORT=5002 ./run_server.sh
+```
+
+| File | What you see |
+| --- | --- |
+| `ledger_blocking_errors.json` | No statement. 24 problems, covering every check that blocks: accounts with a reused number, an unknown type or subtype, a type and subtype that disagree or a missing field, and posted entries that do not balance, use an unknown account, have invalid amounts or dates, too few lines, a line with both sides, an unknown status, a reused id or a missing field. |
+| `ledger_warnings.json` | A statement with 11 notes: the same problems in draft and void entries, a sound draft, and a possible duplicate. It also has valid but unusual entries: a negative expense, contra revenue that ends positive, an expense under other income, an inactive account, a five-digit account, a zero line, and an entry with no memo. |
+| `ledger_unreadable.json` | No statement. The file stops in the middle, so it cannot be read at all. |
+
 ## Test
 
 ```
