@@ -1,11 +1,10 @@
-"""The HTTP layer: the JSON shape, the page, and every error path."""
+"""Integration tests: the HTTP layer through Flask's test client. The JSON, the page, and every error path."""
 
 import json
-from decimal import Decimal as D
 
 import pytest
 
-from app import accounting, create_app, money
+from app import create_app
 from builders import allow_a_subtype_that_no_section_uses, credit, debit, entry, ledger_data
 
 Q1 = "start=2026-01-01&end=2026-03-31"
@@ -29,21 +28,9 @@ def client_with_bad_ledger(tmp_path):
     return create_app(path).test_client()
 
 
-# --- money formatting ---
+def error_summary(response):
+    return [(error["code"], error["field"]) for error in response.get_json()["errors"]]
 
-def test_money_for_json():
-    assert money(D("-44480.14")) == "-44480.14"
-    assert money(D("5000")) == "5000.00"
-    assert money(D("0.00")) == "0.00"
-
-
-def test_money_for_the_page():
-    assert accounting(D("35650.75")) == "35,650.75"
-    assert accounting(D("-44480.14")) == "(44,480.14)"
-    assert accounting(D("0.00")) == "0.00"
-
-
-# --- GET /income-statement ---
 
 def test_q1_2026_json(client):
     response = client.get(f"/income-statement?{Q1}")
@@ -143,12 +130,6 @@ def test_start_and_end_on_the_same_day(client):
     assert response.get_json()["net_income"] == "-17457.82"  # 1,000.00 - 18,500.00 + 42.18
 
 
-# --- request errors ---
-
-def error_summary(response):
-    return [(error["code"], error["field"]) for error in response.get_json()["errors"]]
-
-
 def test_missing_dates_are_both_reported(client):
     response = client.get("/income-statement")
 
@@ -181,8 +162,6 @@ def test_start_after_end(client):
         "The start date 2026-04-01 is after the end date 2026-03-31."
     )
 
-
-# --- ledger errors ---
 
 def test_a_bad_ledger_returns_every_problem_and_no_numbers(client_with_bad_ledger):
     response = client_with_bad_ledger.get(f"/income-statement?{Q1}")
@@ -226,8 +205,6 @@ def test_a_control_total_mismatch_is_an_error_not_a_statement(tmp_path, monkeypa
     assert "net income is 100.00 but the balance-sheet accounts moved by 70.00" in page_response.text
     assert "Net income" not in page_response.text
 
-
-# --- the page ---
 
 def test_first_visit_goes_to_the_whole_ledger(client):
     response = client.get("/")
@@ -289,8 +266,6 @@ def test_a_problem_in_a_draft_is_shown_as_a_note_and_the_statement_still_appears
     assert page_response.status_code == 200
     assert "JE-2 does not balance: debits 500.00, credits 400.00. This entry is a draft" in page_response.text
 
-
-# --- errors that are not about the statement ---
 
 def test_an_unknown_url_returns_the_json_error_shape(client):
     response = client.get("/nope")
