@@ -93,22 +93,12 @@ def entries_in_range(ledger: Ledger, start: date, end: date, status: str) -> lis
     ]
 
 
-def account_totals(entries: list[Entry]) -> tuple[dict[str, Decimal], dict[str, Decimal]]:
-    """Total debits and total credits per account number across the given entries."""
-    debit_totals = {}
-    credit_totals = {}
-    for entry in entries:
-        for line in entry.lines:
-            debit_totals[line.account] = debit_totals.get(line.account, ZERO) + line.debit
-            credit_totals[line.account] = credit_totals.get(line.account, ZERO) + line.credit
-    return debit_totals, credit_totals
-
-
 def detail_lines_by_account(ledger: Ledger, start: date, end: date) -> dict[str, list[DetailLine]]:
     """Every journal line in the ledger, grouped by account number, oldest first.
 
-    Each line records whether it counts toward the range and, if not, why not. This is what
-    the page lists under each account, so that a reader can redo the sums by hand.
+    Each line records whether it counts toward the range and, if not, why not. Every amount
+    on the statement is the sum of the counted lines here, and the page lists these same
+    lines under each account, so what is shown and what is summed cannot differ.
     """
     counted_ids = {entry.id for entry in entries_in_range(ledger, start, end, "posted")}
 
@@ -136,8 +126,6 @@ def detail_lines_by_account(ledger: Ledger, start: date, end: date) -> dict[str,
 
 def build_section(
     ledger: Ledger,
-    debit_totals: dict[str, Decimal],
-    credit_totals: dict[str, Decimal],
     lines_by_account: dict[str, list[DetailLine]],
     title: str,
     total_label: str,
@@ -154,8 +142,9 @@ def build_section(
         accounts = [account for account in ledger.accounts.values() if account.subtype == subtype]
         # Shorter numbers first, so that 6000 comes before 10000. Plain text order would not.
         for account in sorted(accounts, key=lambda account: (len(account.number), account.number)):
-            debits = debit_totals.get(account.number, ZERO)
-            credits = credit_totals.get(account.number, ZERO)
+            detail = lines_by_account.get(account.number, [])
+            debits = sum((line.debit for line in detail if line.counted), ZERO)
+            credits = sum((line.credit for line in detail if line.counted), ZERO)
             amount = credits - debits if credit_normal else debits - credits
             lines.append(StatementLine(
                 account=account.number,
@@ -163,7 +152,7 @@ def build_section(
                 amount=amount,
                 debits=debits,
                 credits=credits,
-                detail=lines_by_account.get(account.number, []),
+                detail=detail,
             ))
 
     total = sum((line.amount for line in lines), ZERO)
@@ -212,15 +201,10 @@ def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
 
 def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     """The income statement for posted entries dated from start to end, both days included."""
-    posted = entries_in_range(ledger, start, end, "posted")
-    debit_totals, credit_totals = account_totals(posted)
-
     lines_by_account = detail_lines_by_account(ledger, start, end)
 
     def section(title: str, total_label: str, subtypes: list[str], credit_normal: bool) -> Section:
-        return build_section(
-            ledger, debit_totals, credit_totals, lines_by_account, title, total_label, subtypes, credit_normal
-        )
+        return build_section(ledger, lines_by_account, title, total_label, subtypes, credit_normal)
 
     # Each section is defined here, once: its heading, its subtotal label, the subtypes it
     # holds in display order, and its sign. The page reads all of that from the section.
