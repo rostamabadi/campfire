@@ -1,4 +1,12 @@
-"""Helpers for building small ledgers in tests, in the same shape as ledger.json."""
+"""Helpers shared by the tests: small ledgers in the ledger.json shape, and ways to read a statement."""
+
+from datetime import date
+from pathlib import Path
+
+from ledger import LedgerError, parse_ledger
+from statement import income_statement
+
+LEDGER_PATH = Path(__file__).parent.parent / "ledger.json"
 
 
 def account(number, name, type, subtype, is_active=True):
@@ -50,3 +58,50 @@ def ledger_data(*entries, accounts=CHART):
         "accounts": list(accounts),
         "journal_entries": list(entries),
     }
+
+
+def day(text):
+    return date.fromisoformat(text)
+
+
+def statement_of(*entries, start="2026-01-01", end="2026-12-31", accounts=CHART):
+    ledger = parse_ledger(ledger_data(*entries, accounts=accounts))
+    return income_statement(ledger, day(start), day(end))
+
+
+def amounts(section):
+    return {line.account: line.amount for line in section.lines}
+
+
+def all_amounts(statement):
+    """Every line on the statement, by account number."""
+    return {
+        **amounts(statement.revenue),
+        **amounts(statement.cost_of_goods_sold),
+        **amounts(statement.operating_expenses),
+        **amounts(statement.other_income),
+    }
+
+
+def every_section(statement):
+    """The four sections of the statement, then the balance-sheet accounts."""
+    return statement.sections + [statement.balance_sheet_movement]
+
+
+def detail_of(section, account_number):
+    """(entry id, debit, credit, reason) for each line listed under the account. Empty reason means counted."""
+    (line,) = [line for line in section.lines if line.account == account_number]
+    return [(item.entry_id, item.debit, item.credit, item.reason) for item in line.detail]
+
+
+def find_errors(data):
+    """The blocking errors reported for this data, or an empty list if it loads."""
+    try:
+        parse_ledger(data)
+    except LedgerError as problem:
+        return problem.errors
+    return []
+
+
+def error_codes(data):
+    return [error["code"] for error in find_errors(data)]

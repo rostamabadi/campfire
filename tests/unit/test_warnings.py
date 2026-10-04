@@ -1,56 +1,9 @@
-"""Warnings: drafts in the range and possible duplicates. Neither changes the totals."""
+"""Unit tests: warnings for drafts, possible duplicates, and problems in entries that do not count."""
 
-from datetime import date
 from decimal import Decimal as D
-from pathlib import Path
 
-from builders import credit, debit, entry, ledger_data
-from ledger import load_ledger, parse_ledger
-from statement import income_statement
+from builders import credit, debit, entry, statement_of
 
-LEDGER_PATH = Path(__file__).parent.parent / "ledger.json"
-
-
-def day(text):
-    return date.fromisoformat(text)
-
-
-def statement_of(*entries, start="2026-01-01", end="2026-12-31"):
-    return income_statement(parse_ledger(ledger_data(*entries)), day(start), day(end))
-
-
-# --- the real ledger ---
-
-def test_q1_2026_reports_the_draft_bonus_accrual_and_nothing_else():
-    statement = income_statement(load_ledger(LEDGER_PATH), day("2026-01-01"), day("2026-03-31"))
-
-    (warning,) = statement.warnings
-    assert warning["code"] == "draft_not_included"
-    assert warning["entry_ids"] == ["JE-019"]
-    assert warning["date"] == "2026-03-15"
-    assert warning["memo"] == "Q1 bonus accrual (pending approval)"
-    assert warning["amount"] == "5000.00"
-    assert warning["message"] == (
-        "JE-019 (2026-03-15, Q1 bonus accrual (pending approval), 5,000.00) is a draft "
-        "and is not included in the totals."
-    )
-    assert statement.net_income == D("-44480.14")  # the draft's 5,000.00 is not in it
-
-
-def test_january_2026_has_no_warnings():
-    statement = income_statement(load_ledger(LEDGER_PATH), day("2026-01-01"), day("2026-01-31"))
-
-    assert statement.warnings == []
-
-
-def test_the_voided_double_entry_in_february_is_not_a_possible_duplicate():
-    # JE-009 (void) and JE-010 (posted) are identical. The void is the fix, so nothing to report.
-    statement = income_statement(load_ledger(LEDGER_PATH), day("2026-02-01"), day("2026-02-28"))
-
-    assert statement.warnings == []
-
-
-# --- drafts ---
 
 def test_a_draft_outside_the_range_is_not_reported():
     statement = statement_of(
@@ -80,8 +33,6 @@ def test_void_entries_are_not_reported():
     assert statement.warnings == []
 
 
-# --- problems in draft and void entries ---
-
 def test_a_problem_in_a_draft_is_reported_on_every_statement_and_changes_no_total():
     # The draft does not balance. It is dated in March, the statement is for January.
     statement = statement_of(
@@ -96,8 +47,6 @@ def test_a_problem_in_a_draft_is_reported_on_every_statement_and_changes_no_tota
     ]
     assert statement.net_income == D("100.00")
 
-
-# --- possible duplicates ---
 
 def test_two_posted_entries_with_the_same_date_and_lines_are_reported_and_both_counted():
     statement = statement_of(
