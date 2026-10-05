@@ -14,7 +14,10 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-COPIED = ["ledger.json", "checks.py", "ledger.py", "statement.py", "app.py", "templates", "tests", "pyproject.toml"]
+COPIED = [
+    "ledger.json", "checks.py", "ledger.py", "statement.py", "currency.py", "app.py", "templates", "tests",
+    "pyproject.toml",
+]
 
 # (the mistake, the file, the correct code, the wrong code)
 MISTAKES = [
