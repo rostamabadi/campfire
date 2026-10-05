@@ -51,7 +51,9 @@ class Section:
 @dataclass(frozen=True)
 class IncomeStatement:
     company: str
-    currency: str
+    currency: str  # the currency of the amounts on the statement
+    ledger_currency: str  # the currency of the ledger. The control total and the detail stay in it
+    rate: Decimal  # what one unit of the ledger's currency is worth in `currency`. 1 when not converted
     start: date
     end: date
     revenue: Section
@@ -199,6 +201,16 @@ def find_warnings(ledger: Ledger, start: date, end: date) -> list[dict]:
     return warnings
 
 
+def results(
+    revenue: Section, cost_of_goods_sold: Section, operating_expenses: Section, other_income: Section
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Gross profit, operating income and net income, from the totals of the four sections."""
+    gross_profit = revenue.total - cost_of_goods_sold.total
+    operating_income = gross_profit - operating_expenses.total
+    net_income = operating_income + other_income.total
+    return gross_profit, operating_income, net_income
+
+
 def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     """The income statement for posted entries dated from start to end, both days included."""
     lines_by_account = detail_lines_by_account(ledger, start, end)
@@ -215,9 +227,7 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     )
     other_income = section("Other income", "Total other income", ["other_income"], credit_normal=True)
 
-    gross_profit = revenue.total - cost_of_goods_sold.total
-    operating_income = gross_profit - operating_expenses.total
-    net_income = operating_income + other_income.total
+    gross_profit, operating_income, net_income = results(revenue, cost_of_goods_sold, operating_expenses, other_income)
 
     # The control total. Every entry balances, so the balance-sheet lines of the same entries
     # must net to the same amount as the income statement. If they do not, an account was
@@ -235,6 +245,8 @@ def income_statement(ledger: Ledger, start: date, end: date) -> IncomeStatement:
     return IncomeStatement(
         company=ledger.company,
         currency=ledger.currency,
+        ledger_currency=ledger.currency,
+        rate=Decimal("1"),
         start=start,
         end=end,
         revenue=revenue,
