@@ -79,6 +79,24 @@ uv run ruff check .
 uv run mypy
 ```
 
+## Video walkthrough
+
+`video/walkthrough.webm` is the walkthrough: 4 minutes 25 seconds, without sound, with
+captions. It plays in a browser such as Chrome, not in QuickTime. `video/timeline.md` lists
+each caption with its time in the video.
+
+A script records it, driving the app in a headless browser with Playwright:
+
+```
+uv run python -m video.record_walkthrough   # about 5 minutes. CAPTIONS=0 leaves the captions out
+```
+
+It runs `./cicd.sh` first, to show its real output, then records in real time and replaces
+the video and the timeline. The pages come from the running app, the code is read from the
+project files, and the terminal output is what the commands printed. The script adds the
+zoom, an address bar, a pointer and the highlight boxes, and has the app indent its JSON.
+The colours of the code come from Pygments, which is installed with pytest.
+
 ## Versions
 
 Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, Playwright 1.63.0 with pytest-playwright
@@ -96,6 +114,7 @@ Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, Playwright 1.63.0 with pyt
 | `templates/statement.html` | The page: date form, errors, warnings, statement, check table, line detail. |
 | `tests/` | pytest, in `unit`, `integration` and `e2e`. `builders.py` holds the shared helpers. `mutation_check.py` plants mistakes. |
 | `setup.sh`, `run_server.sh`, `run_all_tests.sh`, `cicd.sh` | Set up a Mac, run the app, run every test, run lint and types and every test. |
+| `video/` | The walkthrough video, the timeline of its captions, and `record_walkthrough.py`, which records it. |
 
 The path from the dates to the numbers: `app.py` `read_ledger` and `parse_range` →
 `statement.py` `income_statement` → `detail_lines_by_account` (which uses `entries_in_range`
