@@ -39,6 +39,8 @@ def test_q1_2026_json(client):
     assert response.get_json() == {
         "company": "Northwind Coffee Roasters",
         "currency": "USD",
+        "ledger_currency": "USD",
+        "rate": "1",
         "start": "2026-01-01",
         "end": "2026-03-31",
         "revenue": {
@@ -98,7 +100,7 @@ def test_json_keeps_the_order_of_the_statement(client):
     response = client.get(f"/income-statement?{Q1}")
 
     assert list(json.loads(response.text)) == [
-        "company", "currency", "start", "end",
+        "company", "currency", "ledger_currency", "rate", "start", "end",
         "revenue", "cost_of_goods_sold", "gross_profit",
         "operating_expenses", "operating_income",
         "other_income", "net_income", "balance_sheet_movement", "warnings",
@@ -161,6 +163,166 @@ def test_start_after_end(client):
     assert response.get_json()["errors"][0]["message"] == (
         "The start date 2026-04-01 is after the end date 2026-03-31."
     )
+
+
+def test_q1_2026_in_euros_at_the_default_rate(client):
+    response = client.get(f"/income-statement?{Q1}&currency=EUR")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert (body["currency"], body["ledger_currency"], body["rate"]) == ("EUR", "USD", "0.9")
+
+    # Each line is the Q1 amount x 0.9, rounded half up to the cent. Every total is added up
+    # from the converted lines above it.
+    assert body["revenue"] == {
+        "lines": [
+            {"account": "4000", "name": "Product Revenue", "amount": "32085.68"},           # 32,085.675
+            {"account": "4100", "name": "Subscription Revenue", "amount": "2700.00"},
+            {"account": "4900", "name": "Sales Returns & Discounts", "amount": "-720.23"},  # -720.225
+        ],
+        "total": "34065.45",  # 32,085.68 + 2,700.00 - 720.23
+    }
+    assert body["cost_of_goods_sold"] == {
+        "lines": [{"account": "5000", "name": "Cost of Goods Sold", "amount": "12845.48"}],  # 12,845.475
+        "total": "12845.48",
+    }
+    # 34,065.45 - 12,845.48. Converting the recorded 23,577.75 on its own would give 21,219.98.
+    assert body["gross_profit"] == "21219.97"
+    assert body["operating_expenses"] == {
+        "lines": [
+            {"account": "6000", "name": "Salaries", "amount": "49950.00"},
+            {"account": "6100", "name": "Rent", "amount": "8100.00"},
+            {"account": "6200", "name": "Software", "amount": "989.97"},             # 989.973
+            {"account": "6300", "name": "Marketing (legacy)", "amount": "2250.09"},
+        ],
+        "total": "61290.06",
+    }
+    assert body["operating_income"] == "-40070.09"  # 21,219.97 - 61,290.06
+    assert body["other_income"] == {
+        "lines": [{"account": "7000", "name": "Interest Income", "amount": "37.96"}],  # 37.962
+        "total": "37.96",
+    }
+    assert body["net_income"] == "-40032.13"  # -40,070.09 + 37.96
+
+    # The control total and the warnings stay in USD, as recorded.
+    assert body["balance_sheet_movement"]["lines"][0] == {"account": "1000", "name": "Cash", "amount": "-52007.07"}
+    assert body["balance_sheet_movement"]["total"] == "-44480.14"
+    assert body["warnings"][0]["amount"] == "5000.00"
+
+
+@pytest.mark.parametrize(
+    "currency, net_revenue, cogs, gross_profit, operating_expenses, operating_income, other_income, net_income",
+    [
+        # Euro at the default 0.9, as in the test above.
+        ("currency=EUR", "34065.45", "12845.48", "21219.97", "61290.06", "-40070.09", "37.96", "-40032.13"),
+        # Pound at the default 0.7. Revenue 24,955.53 + 2,100.00 - 560.18. Cost 9,990.93 (9,990.925).
+        # Expenses 38,850.00 + 6,300.00 + 769.98 + 1,750.07. Interest 29.53 (29.526).
+        ("currency=GBP", "26495.35", "9990.93", "16504.42", "47670.05", "-31165.63", "29.53", "-31136.10"),
+        # Euro at a typed 0.5. Revenue 17,825.38 + 1,500.00 - 400.13. Cost 7,136.38 (7,136.375).
+        # Expenses 27,750.00 + 4,500.00 + 549.99 + 1,250.05. Interest 21.09.
+        # Net income is a cent away from the recorded -44,480.14 x 0.5 = -22,240.07.
+        ("currency=EUR&rate=0.5", "18925.25", "7136.38", "11788.87", "34050.04", "-22261.17", "21.09", "-22240.08"),
+    ],
+)
+def test_q1_2026_in_another_currency(
+    client, currency, net_revenue, cogs, gross_profit, operating_expenses, operating_income, other_income, net_income
+):
+    body = client.get(f"/income-statement?{Q1}&{currency}").get_json()
+
+    assert body["revenue"]["total"] == net_revenue
+    assert body["cost_of_goods_sold"]["total"] == cogs
+    assert body["gross_profit"] == gross_profit
+    assert body["operating_expenses"]["total"] == operating_expenses
+    assert body["operating_income"] == operating_income
+    assert body["other_income"]["total"] == other_income
+    assert body["net_income"] == net_income
+    assert body["balance_sheet_movement"]["total"] == "-44480.14"  # never converted
+
+
+def test_a_typed_rate_is_used_and_returned(client):
+    body = client.get("/income-statement?start=2026-03-31&end=2026-03-31&currency=EUR&rate=0.9137").get_json()
+
+    assert (body["currency"], body["rate"]) == ("EUR", "0.9137")
+    assert body["revenue"]["total"] == "913.70"                # 1,000.00 x 0.9137
+    assert body["operating_expenses"]["total"] == "16903.45"   # 18,500.00 x 0.9137
+    assert body["other_income"]["total"] == "38.54"            # 42.18 x 0.9137 = 38.539866
+    assert body["net_income"] == "-15951.21"                   # 913.70 - 16,903.45 + 38.54
+
+
+def test_asking_for_the_ledgers_own_currency_converts_nothing(client):
+    asked = client.get(f"/income-statement?{Q1}&currency=USD&rate=").get_json()
+    not_asked = client.get(f"/income-statement?{Q1}").get_json()
+
+    assert asked == not_asked
+    assert (asked["currency"], asked["rate"], asked["net_income"]) == ("USD", "1", "-44480.14")
+
+
+def test_a_converted_json_carries_no_numbers_only_decimal_strings(client):
+    def reject(token):
+        raise AssertionError(f"number in the JSON: {token}")
+
+    response = client.get(f"/income-statement?{Q1}&currency=GBP&rate=0.75")
+
+    json.loads(response.text, parse_float=reject, parse_int=reject)
+
+
+def test_a_currency_that_is_not_offered(client):
+    response = client.get(f"/income-statement?{Q1}&currency=JPY")
+
+    assert response.status_code == 400
+    assert list(response.get_json()) == ["errors"]
+    assert error_summary(response) == [("invalid_currency", "currency")]
+    assert response.get_json()["errors"][0]["message"] == (
+        "The currency 'JPY' is not available. Use one of: USD, EUR, GBP."
+    )
+
+
+@pytest.mark.parametrize("bad_rate", ["abc", "0", "-0.9", "0.1234567", "1e2"])
+def test_invalid_rate(client, bad_rate):
+    response = client.get("/income-statement", query_string={
+        "start": "2026-01-01", "end": "2026-03-31", "currency": "EUR", "rate": bad_rate,
+    })
+
+    assert response.status_code == 400
+    assert error_summary(response) == [("invalid_rate", "rate")]
+    assert f"'{bad_rate}'" in response.get_json()["errors"][0]["message"]
+
+
+def test_a_rate_with_the_ledgers_own_currency_is_an_error(client):
+    response = client.get(f"/income-statement?{Q1}&rate=0.9")
+
+    assert response.status_code == 400
+    assert error_summary(response) == [("invalid_rate", "rate")]
+
+
+def test_problems_with_the_dates_and_the_currency_are_reported_together(client):
+    response = client.get("/income-statement?end=2026-02-30&currency=JPY&rate=abc")
+
+    assert response.status_code == 400
+    assert error_summary(response) == [
+        ("missing_parameter", "start"),
+        ("invalid_date", "end"),
+        ("invalid_currency", "currency"),
+        ("invalid_rate", "rate"),
+    ]
+
+
+def test_a_ledger_that_is_not_in_dollars_is_shown_as_recorded_and_not_converted(tmp_path):
+    data = ledger_data(entry("JE-1", "2026-01-05", debit("1100", "100.00"), credit("4000", "100.00")))
+    data["currency"] = "CAD"
+    path = tmp_path / "ledger.json"
+    path.write_text(json.dumps(data))
+    client = create_app(path).test_client()
+
+    as_recorded = client.get(f"/income-statement?{Q1}")
+    converted = client.get(f"/income-statement?{Q1}&currency=EUR")
+
+    assert as_recorded.status_code == 200
+    body = as_recorded.get_json()
+    assert (body["currency"], body["ledger_currency"], body["rate"]) == ("CAD", "CAD", "1")
+    assert body["net_income"] == "100.00"
+    assert converted.status_code == 400
+    assert error_summary(converted) == [("invalid_currency", "currency")]
 
 
 def test_a_bad_ledger_returns_every_problem_and_no_numbers(client_with_bad_ledger):
@@ -382,3 +544,73 @@ def test_page_shows_ledger_errors_even_on_the_first_visit(client_with_bad_ledger
     assert "JE-1 does not balance: debits 100.00, credits 90.00." in response.text
     assert "Entry id JE-2 is used by more than one journal entry." in response.text
     assert "Net income" not in response.text
+
+
+def test_page_offers_the_currencies_and_shows_the_ledgers_own_by_default(client):
+    text = client.get(f"/?{Q1}").text
+
+    assert '<option value="USD">USD, as recorded</option>' in text
+    assert '<option value="EUR">Euro (EUR), default rate 0.9</option>' in text
+    assert '<option value="GBP">Pound (GBP), default rate 0.7</option>' in text
+    assert "selected" not in text
+    assert "both days included. Amounts in USD.</p>" in text
+    assert "converted" not in text
+
+
+def test_page_shows_q1_2026_in_euros(client):
+    response = client.get(f"/?{Q1}&currency=EUR&rate=")
+
+    assert response.status_code == 200
+    text = response.text
+    assert "Amounts in EUR, converted from USD at 0.9." in text
+    assert '<option value="EUR" selected>' in text  # the form keeps the currency
+    assert "(720.23)" in text       # contra revenue
+    assert "34,065.45" in text      # net revenue
+    assert "21,219.97" in text      # gross profit
+    assert "(40,070.09)" in text    # operating income
+    assert text.count("(40,032.13)") == 1  # net income, in the statement and nowhere else
+
+
+def test_page_keeps_the_check_the_detail_and_the_notes_in_the_ledgers_currency(client):
+    text = client.get(f"/?{Q1}&currency=EUR").text
+
+    assert "The check is made in USD, before the conversion." in text
+    assert "Net income as recorded is (44,480.14)." in text
+    assert "Total movement (equals net income in USD)" in text
+    assert "(52,007.07)" in text   # cash, not converted
+    # Net income as recorded, the movement total that equals it, and the same total again in the detail.
+    assert text.count("(44,480.14)") == 3
+    assert "The amounts here are in USD, as recorded." in text
+    assert "<summary>4000 Product Revenue: 35,650.75</summary>" in text
+    assert "32,085.68" in text     # the same account on the statement, converted
+    assert "<strong>Notes on this statement</strong> (amounts in USD, as recorded)" in text
+    assert "5,000.00) is a draft" in text
+
+
+def test_page_uses_and_keeps_a_typed_rate(client):
+    text = client.get(f"/?{Q1}&currency=GBP&rate=0.5").text
+
+    assert "Amounts in GBP, converted from USD at 0.5." in text
+    assert '<option value="GBP" selected>' in text
+    assert 'name="rate" value="0.5"' in text
+    assert "(22,240.08)" in text  # net income, as in the JSON test at 0.5
+
+
+def test_page_shows_currency_errors_and_no_statement(client):
+    response = client.get(f"/?{Q1}&currency=EUR&rate=abc")
+
+    assert response.status_code == 400
+    assert "The rate &#39;abc&#39; is not a valid rate." in response.text
+    assert 'name="rate" value="abc"' in response.text  # the form keeps what was typed
+    assert '<option value="EUR" selected>' in response.text
+    assert "Net income" not in response.text
+
+
+def test_page_escapes_a_typed_currency_and_rate(client):
+    response = client.get("/", query_string={
+        "start": "2026-01-01", "end": "2026-03-31", "currency": "<b>EUR</b>", "rate": '"><script>alert(1)</script>',
+    })
+
+    assert response.status_code == 400
+    assert "<b>EUR</b>" not in response.text
+    assert "<script>alert(1)</script>" not in response.text

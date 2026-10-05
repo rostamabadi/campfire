@@ -10,6 +10,7 @@ from itertools import combinations
 import pytest
 
 from builders import LEDGER_PATH, all_amounts, amounts, day, detail_of, every_section
+from currency import convert_statement
 from ledger import load_ledger
 from statement import income_statement, posted_date_span
 
@@ -217,6 +218,48 @@ def test_two_adjacent_ranges_add_up_to_the_whole_range(real_ledger):
         assert first.net_income + second.net_income == whole.net_income, (start, split, end)
         for number, amount in all_amounts(whole).items():
             assert all_amounts(first)[number] + all_amounts(second)[number] == amount, (start, split, end, number)
+
+
+@pytest.mark.parametrize("rate", ["0.9", "0.7", "0.9137", "1.25"])
+def test_a_converted_statement_adds_up_and_stays_within_half_a_cent_a_line(real_ledger, rate):
+    """Each line is rounded once, by at most half a cent. Everything else is added up from the lines.
+
+    So the converted statement must add up to the cent, and its net income can differ from
+    the recorded net income times the rate by at most half a cent for each line.
+    """
+    rate = D(rate)
+    half_a_cent = D("0.005")
+    days = sorted({entry.date for entry in real_ledger.entries})
+
+    for start, end in combinations(days, 2):
+        recorded = income_statement(real_ledger, start, end)
+        converted = convert_statement(recorded, "EUR", rate)
+
+        line_count = 0
+        for converted_section, recorded_section in zip(converted.sections, recorded.sections, strict=True):
+            for converted_line, recorded_line in zip(converted_section.lines, recorded_section.lines, strict=True):
+                assert converted_line.account == recorded_line.account
+                assert abs(converted_line.amount - recorded_line.amount * rate) <= half_a_cent, (start, end)
+                line_count += 1
+            assert converted_section.total == sum(line.amount for line in converted_section.lines), (start, end)
+
+        assert converted.gross_profit == converted.revenue.total - converted.cost_of_goods_sold.total
+        assert converted.operating_income == converted.gross_profit - converted.operating_expenses.total
+        assert converted.net_income == converted.operating_income + converted.other_income.total
+        assert abs(converted.net_income - recorded.net_income * rate) <= half_a_cent * line_count, (start, end)
+
+        # The control total is left alone, and still equals the recorded net income.
+        assert converted.balance_sheet_movement == recorded.balance_sheet_movement
+        assert converted.balance_sheet_movement.total == recorded.net_income
+
+
+def test_a_rate_of_one_changes_no_amount(real_ledger):
+    recorded = income_statement(real_ledger, day("2026-01-01"), day("2026-03-31"))
+
+    converted = convert_statement(recorded, "EUR", D("1"))
+
+    assert all_amounts(converted) == all_amounts(recorded)
+    assert converted.net_income == recorded.net_income == D("-44480.14")
 
 
 def test_posted_date_span_of_the_real_ledger(real_ledger):
