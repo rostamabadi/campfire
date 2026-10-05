@@ -32,6 +32,9 @@ A net loss, for 2026-01-01 to 2026-03-31.
   only a note.
 - **Possible duplicates are flagged, not removed.** Two posted entries with the same date
   and lines both stay. JE-009 and JE-010 raise nothing, since JE-009 is void.
+- **Another currency is a restatement at one rate**, not the rate on each entry's date. Each
+  account line is converted and rounded half up, and the totals are added up from those, so
+  the statement adds up: Q1 is (40,032.13) in EUR at 0.9. The check and the detail stay in USD.
 - **No closing entries exist**, so a range across the year end just sums activity.
 
 ## How the numbers were checked
@@ -41,7 +44,7 @@ A net loss, for 2026-01-01 to 2026-03-31.
 - Two invariants run over 1,035 date ranges: net income equals the movement in
   balance-sheet accounts, and adjacent ranges add up. The app repeats the first on every
   request.
-- `tests/mutation_check.py` plants 20 mistakes one at a time. The tests fail for each.
+- `tests/mutation_check.py` plants 30 mistakes one at a time. The tests fail for each.
 - The page lists every journal line by account, ignored ones struck out with the reason, so
   any amount can be re-added by hand.
 
@@ -57,6 +60,8 @@ Claude Code helped read the brief, list the traps in the data, and write the cod
 - **A stale check:** it planted mistakes once, then added four rules without rerunning.
 - **A commit that claimed too much:** two file writes failed unnoticed, so a commit message
   described changes it did not contain.
+- **A form label:** its currency list sat inside its label, so the label's text included
+  every option. A browser test caught it.
 - **Overruled:** it proposed blocking on a bad draft, and hiding out-of-range lines.
 - **Not trusted:** tests that pass first time prove little, so mistakes are planted.
 

@@ -544,7 +544,7 @@ def record(take: Take, main: str, with_warnings: str, with_errors: str, cicd: st
               "def test_net_income_equals_the_net_movement_in_balance_sheet_accounts(",
               "assert income_statement(real_ledger, start, end).net_income == net_debits")
 
-    take.say("The mutation check plants 20 mistakes, one at a time, and confirms the tests fail for each.")
+    take.say("The mutation check plants 30 mistakes, one at a time, and confirms the tests fail for each.")
     take.code("tests/mutation_check.py", "MISTAKES = [", '"contra revenue is forced positive"')
 
     take.say("cicd.sh runs lint, types, every test and the mutation check.")

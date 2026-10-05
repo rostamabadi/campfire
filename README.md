@@ -1,7 +1,8 @@
 # Income statement
 
 A small app that shows an income statement (P&L) for Northwind Coffee Roasters for any date
-range, built from the chart of accounts and journal entries in `ledger.json`.
+range, built from the chart of accounts and journal entries in `ledger.json`. The ledger is
+in US dollars, and the statement can also be shown in euros or pounds.
 
 The backend is Flask. The frontend is a server-rendered page from the same process, so one
 command runs both.
@@ -32,7 +33,10 @@ uv run flask --app app run --port 5001
   the last. Change the dates to see any other range. Under the statement, "Detail" lists
   every journal line by account, with the lines that do not count struck out and the
   reason, so each amount can be added up by hand.
-- API: http://127.0.0.1:5001/income-statement?start=2026-01-01&end=2026-03-31
+- Currency: choose Euro or Pound in the form to see the statement converted from USD. Leave
+  the rate blank for the default, 0.9 for the euro and 0.7 for the pound, or type your own.
+- API: http://127.0.0.1:5001/income-statement?start=2026-01-01&end=2026-03-31, and with
+  `&currency=EUR` or `&currency=GBP&rate=0.75` for another currency.
 
 Port 5001 is used because Flask's default, 5000, is taken by AirPlay Receiver on macOS.
 `ledger.json` is read on every request, so an edit to it shows up without a restart.
@@ -65,7 +69,7 @@ LEDGER_FILE=tests/data/ledger_warnings.json PORT=5002 ./run_server.sh
 | `tests/integration` | `ledger.json` loaded from disk, and the HTTP layer through Flask's test client. |
 | `tests/e2e` | A real browser against the running app, with Playwright. |
 
-The mutation check plants 20 mistakes, one at a time, in a temporary copy of the project and
+The mutation check plants 30 mistakes, one at a time, in a temporary copy of the project and
 confirms that the tests fail for each. Lint is ruff, on the code and the tests. Types are
 mypy, on the application code. Neither has any suppression.
 
@@ -110,26 +114,36 @@ Python 3.14.7, uv 0.12.21, Flask 3.1.3, pytest 9.1.1, Playwright 1.63.0 with pyt
 | `checks.py` | The checks on the raw data, and the two value parsers for amounts and dates. |
 | `ledger.py` | The data model as dataclasses with `Decimal` amounts, and loading it from the file. |
 | `statement.py` | Builds the statement: lists every line per account, sums the counted ones, lays out sections and subtotals, runs the control total, finds warnings. |
+| `currency.py` | The currencies offered and their default rates, the check on a typed rate, and the conversion of a statement. |
 | `app.py` | Flask routes, request validation, error responses, money formatting. |
-| `templates/statement.html` | The page: date form, errors, warnings, statement, check table, line detail. |
+| `templates/statement.html` | The page: date and currency form, errors, warnings, statement, check table, line detail. |
 | `tests/` | pytest, in `unit`, `integration` and `e2e`. `builders.py` holds the shared helpers. `mutation_check.py` plants mistakes. |
 | `setup.sh`, `run_server.sh`, `run_all_tests.sh`, `cicd.sh` | Set up a Mac, run the app, run every test, run lint and types and every test. |
 | `video/` | The walkthrough video, the timeline of its captions, and `record_walkthrough.py`, which records it. |
 
-The path from the dates to the numbers: `app.py` `read_ledger` and `parse_range` →
-`statement.py` `income_statement` → `detail_lines_by_account` (which uses `entries_in_range`
-to decide what counts) → `build_section` for each section → subtotals → control total →
-`statement_json` or the template.
+The path from the dates to the numbers: `app.py` `read_ledger`, `parse_range` and
+`parse_currency` → `statement.py` `income_statement` → `detail_lines_by_account` (which uses
+`entries_in_range` to decide what counts) → `build_section` for each section → `results` for
+the subtotals → control total → `currency.py` `convert_statement`, only when another
+currency is asked for → `statement_json` or the template.
 
 ## Response
 
 `GET /income-statement?start=YYYY-MM-DD&end=YYYY-MM-DD`. Both dates are included in the
 range. Amounts are decimal strings, never JSON numbers. A negative amount has a minus sign.
 
+| Parameter | |
+| --- | --- |
+| `start`, `end` | Required. The first and the last day of the range. |
+| `currency` | Optional. `EUR` or `GBP` converts the statement. Without it, or with `USD`, nothing is converted. |
+| `rate` | Optional, only with `EUR` or `GBP`. What one US dollar is worth in that currency, above 0 and below 1,000,000, with at most 6 decimal places. Without it the default is used: 0.9 for `EUR`, 0.7 for `GBP`. |
+
 ```json
 {
   "company": "Northwind Coffee Roasters",
   "currency": "USD",
+  "ledger_currency": "USD",
+  "rate": "1",
   "start": "2026-01-01",
   "end": "2026-03-31",
   "revenue": {
@@ -158,6 +172,14 @@ range. Amounts are decimal strings, never JSON numbers. A negative amount has a 
 balance-sheet account for the same entries. Every entry balances, so its total must equal
 `net_income`. If it ever does not, the app returns an error instead of a statement.
 
+With `currency=EUR`, `currency` is `"EUR"`, `ledger_currency` stays `"USD"` and `rate` is the
+rate used, such as `"0.9"`. Each line `amount` is the recorded amount times the rate, rounded
+half up to the cent. Every `total`, and `gross_profit`, `operating_income` and `net_income`,
+is added up from the converted lines, so the statement adds up in the other currency. Net
+income can therefore differ by a few cents from the recorded net income times the rate.
+`balance_sheet_movement` and the amounts in `warnings` are never converted. They stay in
+`ledger_currency`, where the check was made.
+
 Errors always have one shape and list every problem found:
 
 ```json
@@ -167,6 +189,7 @@ Errors always have one shape and list every problem found:
 | Status | Codes | When |
 | --- | --- | --- |
 | 400 | `missing_parameter`, `invalid_date`, `invalid_range` | The request dates. Each names the `field`. |
+| 400 | `invalid_currency`, `invalid_rate` | A currency that is not offered, a ledger that is not in USD, a rate that is not valid, or a rate sent with the ledger's own currency. Each names the `field`. |
 | 500 | `missing_field`, `unbalanced_entry`, `unknown_account`, `invalid_amount`, `invalid_line`, `too_few_lines`, `unknown_status`, `unknown_type`, `unknown_subtype`, `type_subtype_mismatch`, `invalid_date`, `duplicate_id` | A problem in the ledger data that could change the totals. Each names the `entry_id` or `account`. No numbers are returned. |
 | 500 | `unreadable_ledger` | The file is missing, is not JSON, or has the wrong structure. |
 | 500 | `control_total_mismatch` | Net income and the balance-sheet movement differ. |
