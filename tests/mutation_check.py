@@ -141,6 +141,67 @@ MISTAKES = [
         'if not errors and dates["start"] > dates["end"]:',
         "if False:",
     ),
+    (
+        "amounts are divided by the rate",
+        "currency.py",
+        "WIDE.multiply(amount, rate)",
+        "WIDE.divide(amount, rate)",
+    ),
+    (
+        "half a cent is rounded to the even cent",
+        "currency.py",
+        "rounding=ROUND_HALF_UP",
+        'rounding="ROUND_HALF_EVEN"',
+    ),
+    (
+        "the product of an amount and a rate keeps only 28 digits",
+        "currency.py",
+        "WIDE.multiply(amount, rate)",
+        "(amount * rate)",
+    ),
+    (
+        "a converted total is the recorded total converted, not the sum of the converted lines",
+        "currency.py",
+        "total=sum((line.amount for line in lines), ZERO)",
+        "total=convert(section.total, rate)",
+    ),
+    (
+        "the converted results are the recorded results converted",
+        "currency.py",
+        "= results(revenue, cost_of_goods_sold, operating_expenses, other_income)",
+        "= (convert(amount, rate) for amount in results(*statement.sections))",
+    ),
+    (
+        "a rate of zero is accepted",
+        "currency.py",
+        "if rate <= 0 or rate >= RATE_LIMIT:",
+        "if rate >= RATE_LIMIT:",
+    ),
+    (
+        "a typed rate is ignored and the default is used",
+        "app.py",
+        "rate = parse_rate(rate_text)",
+        "rate = parse_rate(rate_text) and default_rates.get(code)",
+    ),
+    (
+        "a rate is accepted with the ledger's own currency",
+        "app.py",
+        'if code in ("", ledger_currency):\n        if rate_text:',
+        'if code in ("", ledger_currency):\n        if False:',
+    ),
+    (
+        "a ledger that is not in dollars is converted at the dollar rates",
+        "app.py",
+        "if ledger_currency != BASE_CURRENCY:",
+        "if False:",
+    ),
+    (
+        "the control total is converted too",
+        "currency.py",
+        "    return replace(\n        statement,\n",
+        "    return replace(\n        statement,\n"
+        "        balance_sheet_movement=convert_section(statement.balance_sheet_movement, rate),\n",
+    ),
 ]
 
 
