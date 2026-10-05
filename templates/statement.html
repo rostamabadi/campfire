@@ -7,7 +7,8 @@
     body { font-family: system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; }
     form { margin-bottom: 1.5rem; }
     form div { margin-bottom: 0.5rem; }
-    label { margin-right: 1rem; }
+    label, select { margin-right: 1rem; }
+    label[for] { margin-right: 0.25rem; }
     .errors, .warnings { padding: 0.5rem 1rem; margin-bottom: 1.5rem; border: 1px solid; }
     .errors { border-color: #b00020; background: #fdecea; }
     .warnings { border-color: #a06a00; background: #fff8e1; }
@@ -41,14 +42,14 @@
     <label>End date <input type="date" name="end" value="{{ end }}"></label>
   </div>
   <div>
-    <label>Currency
-      <select name="currency">
-        <option value="{{ ledger_currency }}">{{ ledger_currency ~ ", as recorded" if ledger_currency else "As recorded" }}</option>
-        {% for choice in currencies %}
-        <option value="{{ choice.code }}"{% if choice.code == currency %} selected{% endif %}>{{ choice.name }} ({{ choice.code }}), default rate {{ choice.default_rate }}</option>
-        {% endfor %}
-      </select>
-    </label>
+    {# The label is apart from the list, so that its text is only "Currency", without the options. #}
+    <label for="currency">Currency</label>
+    <select id="currency" name="currency">
+      <option value="{{ ledger_currency }}">{{ ledger_currency ~ ", as recorded" if ledger_currency else "As recorded" }}</option>
+      {% for choice in currencies %}
+      <option value="{{ choice.code }}"{% if choice.code == currency %} selected{% endif %}>{{ choice.name }} ({{ choice.code }}), default rate {{ choice.default_rate }}</option>
+      {% endfor %}
+    </select>
     <label>Rate <input type="text" name="rate" value="{{ rate }}" size="10" inputmode="decimal" placeholder="default"></label>
     <button type="submit">Show statement</button>
   </div>

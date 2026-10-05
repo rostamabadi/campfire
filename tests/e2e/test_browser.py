@@ -127,3 +127,49 @@ def test_a_very_large_range_includes_every_line_in_the_ledger(page: Page):
     expect(page.locator("tr.counted")).to_have_count(45)
     expect(page.locator("tr.not-counted")).to_have_count(6)
     assert sorted(not_counted_reasons(page)) == ["no, draft"] * 2 + ["no, void"] * 4
+
+
+def test_choosing_the_euro_converts_the_statement_at_the_default_rate(page: Page):
+    page.goto(Q1)
+    page.get_by_label("Currency").select_option("EUR")
+    page.get_by_role("button", name="Show statement").click()
+
+    # Each line is the Q1 amount x 0.9, rounded to the cent, and the totals are added up from those.
+    expect(page.locator("h2 + p")).to_contain_text("Amounts in EUR, converted from USD at 0.9.")
+    expect(page.locator("tr", has_text="4900 Sales Returns & Discounts")).to_contain_text("(720.23)")
+    expect(page.locator("tr", has_text="Net revenue")).to_contain_text("34,065.45")
+    expect(page.locator("tr", has_text="Gross profit")).to_contain_text("21,219.97")
+    expect(net_income(page)).to_have_text("(40,032.13)")
+    expect(page.get_by_label("Currency")).to_have_value("EUR")  # the form keeps the currency
+    expect(page.get_by_label("Start date")).to_have_value("2026-01-01")  # and the dates
+    expect(page.get_by_label("Rate")).to_have_value("")
+
+    # The check stays in USD, as recorded.
+    check = page.locator("details", has=page.locator("summary", has_text="Check: movement"))
+    check.locator("summary").click()
+    expect(check.locator("tr.subtotal")).to_contain_text("(44,480.14)")
+    expect(check.locator("tr.subtotal")).to_contain_text("equals net income in USD")
+
+
+def test_a_typed_rate_replaces_the_default_and_usd_shows_the_ledger_again(page: Page):
+    page.goto(Q1)
+    page.get_by_label("Currency").select_option("GBP")
+    page.get_by_label("Rate").fill("0.5")
+    page.get_by_role("button", name="Show statement").click()
+
+    expect(page.locator("h2 + p")).to_contain_text("Amounts in GBP, converted from USD at 0.5.")
+    expect(net_income(page)).to_have_text("(22,240.08)")  # a cent away from 44,480.14 x 0.5, see the JSON test
+    expect(page.get_by_label("Rate")).to_have_value("0.5")
+
+    # Back to USD with the rate still typed: no rate applies, so it is an error, not a guess.
+    page.get_by_label("Currency").select_option("USD")
+    page.get_by_role("button", name="Show statement").click()
+
+    expect(page.locator(".errors")).to_contain_text("USD is the ledger's own currency, so no rate applies.")
+    expect(net_income(page)).to_have_count(0)
+
+    page.get_by_label("Rate").fill("")
+    page.get_by_role("button", name="Show statement").click()
+
+    expect(page.locator("h2 + p")).to_contain_text("Amounts in USD.")
+    expect(net_income(page)).to_have_text("(44,480.14)")
