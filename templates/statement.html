@@ -6,7 +6,9 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; }
     form { margin-bottom: 1.5rem; }
-    label { margin-right: 1rem; }
+    form div { margin-bottom: 0.5rem; }
+    label, select { margin-right: 1rem; }
+    label[for] { margin-right: 0.25rem; }
     .errors, .warnings { padding: 0.5rem 1rem; margin-bottom: 1.5rem; border: 1px solid; }
     .errors { border-color: #b00020; background: #fdecea; }
     .warnings { border-color: #a06a00; background: #fff8e1; }
@@ -35,9 +37,22 @@
 <h1>Income statement</h1>
 
 <form method="get" action="/">
-  <label>Start date <input type="date" name="start" value="{{ start }}"></label>
-  <label>End date <input type="date" name="end" value="{{ end }}"></label>
-  <button type="submit">Show statement</button>
+  <div>
+    <label>Start date <input type="date" name="start" value="{{ start }}"></label>
+    <label>End date <input type="date" name="end" value="{{ end }}"></label>
+  </div>
+  <div>
+    {# The label is apart from the list, so that its text is only "Currency", without the options. #}
+    <label for="currency">Currency</label>
+    <select id="currency" name="currency">
+      <option value="{{ ledger_currency }}">{{ ledger_currency ~ ", as recorded" if ledger_currency else "As recorded" }}</option>
+      {% for choice in currencies %}
+      <option value="{{ choice.code }}"{% if choice.code == currency %} selected{% endif %}>{{ choice.name }} ({{ choice.code }}), default rate {{ choice.default_rate }}</option>
+      {% endfor %}
+    </select>
+    <label>Rate <input type="text" name="rate" value="{{ rate }}" size="10" inputmode="decimal" placeholder="default"></label>
+    <button type="submit">Show statement</button>
+  </div>
 </form>
 
 {% if errors %}
@@ -108,12 +123,22 @@
 {% endmacro %}
 
 {% if statement %}
+{# True when the statement is shown in another currency than the ledger's. #}
+{% set converted = statement.currency != statement.ledger_currency %}
 <h2>{{ statement.company }}</h2>
+{% if converted %}
+<p>
+  {{ statement.start }} to {{ statement.end }}, both days included.
+  Amounts in {{ statement.currency }}, converted from {{ statement.ledger_currency }} at {{ statement.rate }}.
+  Each line is converted and rounded to the cent, and the totals are added up from the converted lines.
+</p>
+{% else %}
 <p>{{ statement.start }} to {{ statement.end }}, both days included. Amounts in {{ statement.currency }}.</p>
+{% endif %}
 
 {% if statement.warnings %}
 <div class="warnings">
-  <p><strong>Notes on this statement</strong></p>
+  <p><strong>Notes on this statement</strong>{% if converted %} (amounts in {{ statement.ledger_currency }}, as recorded){% endif %}</p>
   <ul>
     {% for warning in statement.warnings %}
     <li>{{ warning.message }}</li>
@@ -137,17 +162,21 @@
   <p>
     Debits minus credits on the balance-sheet accounts, for the same entries. Every entry
     balances, so this total has to equal net income.
+    {% if converted %}
+    The check is made in {{ recorded.currency }}, before the conversion.
+    Net income as recorded is {{ recorded.net_income | accounting }}.
+    {% endif %}
   </p>
   <table>
-    {% for line in statement.balance_sheet_movement.lines %}
+    {% for line in recorded.balance_sheet_movement.lines %}
     <tr>
       <td class="account">{{ line.account }} {{ line.name }}</td>
       <td class="amount">{{ line.amount | accounting }}</td>
     </tr>
     {% endfor %}
     <tr class="subtotal">
-      <td>Total movement (equals net income)</td>
-      <td class="amount">{{ statement.balance_sheet_movement.total | accounting }}</td>
+      <td>Total movement (equals net income{{ " in " ~ recorded.currency if converted else "" }})</td>
+      <td class="amount">{{ recorded.balance_sheet_movement.total | accounting }}</td>
     </tr>
   </table>
 </details>
@@ -158,8 +187,12 @@
     Every line in the ledger, under its account. A line counts when its entry is posted and
     dated inside the range. The others are struck out, with the reason. Open an account to
     add up its lines by hand.
+    {% if converted %}
+    The amounts here are in {{ recorded.currency }}, as recorded. The statement above
+    converts the amount of each account at {{ statement.rate }}.
+    {% endif %}
   </p>
-  {% for section in statement.sections + [statement.balance_sheet_movement] %}
+  {% for section in recorded.sections + [recorded.balance_sheet_movement] %}
   {{ detail_group(section) }}
   {% endfor %}
 </details>

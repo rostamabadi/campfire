@@ -511,7 +511,7 @@ def record(take: Take, main: str, with_warnings: str, with_errors: str, cicd: st
     take.code("app.py", "def parse_range(", "return dates.get(")
 
     take.say("income_statement defines the four sections once: heading, subtotal label, subtypes and sign.")
-    take.code("statement.py", "def income_statement(", "net_income = operating_income + other_income.total")
+    take.code("statement.py", "def income_statement(", "gross_profit, operating_income, net_income = results(")
 
     take.say("A line counts when its entry is posted and dated inside the range.")
     take.code("statement.py", "def entries_in_range(", "    ]")
@@ -524,7 +524,7 @@ def record(take: Take, main: str, with_warnings: str, with_errors: str, cicd: st
 
     take.say("Three subtotals, then the control total. If the two figures differ, there is an error "
              "and no statement.")
-    take.code("statement.py", "gross_profit = revenue.total", "))")
+    take.code("statement.py", "gross_profit, operating_income, net_income = results(", "))")
 
     take.say("Money is formatted at the edge: plain strings in JSON, separators and parentheses on the page.")
     take.code("app.py", "def money(", 'return f"{amount:,.2f}"')
@@ -544,7 +544,7 @@ def record(take: Take, main: str, with_warnings: str, with_errors: str, cicd: st
               "def test_net_income_equals_the_net_movement_in_balance_sheet_accounts(",
               "assert income_statement(real_ledger, start, end).net_income == net_debits")
 
-    take.say("The mutation check plants 20 mistakes, one at a time, and confirms the tests fail for each.")
+    take.say("The mutation check plants 30 mistakes, one at a time, and confirms the tests fail for each.")
     take.code("tests/mutation_check.py", "MISTAKES = [", '"contra revenue is forced positive"')
 
     take.say("cicd.sh runs lint, types, every test and the mutation check.")

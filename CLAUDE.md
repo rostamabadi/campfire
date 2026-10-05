@@ -1,7 +1,7 @@
 # Income statement take-home
 
 A small server-rendered app that shows an income statement (P&L) for Northwind Coffee
-Roasters for any date range. Brief:
+Roasters for any date range, in the ledger's US dollars or converted to euros or pounds. Brief:
 https://github.com/Campfire-eng/income-statement-take-home
 
 This file holds the decisions and the working agreements. Each fact has one home:
@@ -42,7 +42,8 @@ tests, ruff for lint, mypy for types. No other dependencies without asking.
 | Other income | `other_income` | credits − debits |
 
 Gross profit = Revenue − Cost of goods sold. Operating income = Gross profit − Operating
-expenses. Net income = Operating income + Other income.
+expenses. Net income = Operating income + Other income. These three formulas live in
+`results`, which the recorded statement and a converted one both use.
 
 - **Sign.** The sign of a line comes only from its section's formula. No `abs()`, no
   flipping by subtype or account type.
@@ -53,7 +54,9 @@ expenses. Net income = Operating income + Other income.
   so that 6000 comes before 10000.
 - **Sections are defined once**, in `income_statement`: heading, subtotal label, subtypes
   and sign. The page reads all of that from the `Section`. A new section also needs its
-  subtypes in `checks.py`, a key in `statement_json` and a row in the template's table.
+  subtypes in `checks.py`, a key in `statement_json`, a row in the template's table, and a
+  place in `results` and in `IncomeStatement.sections`. `convert_statement` unpacks exactly
+  the sections listed there, so it fails loudly until the new one is handled.
 
 ## Money
 
@@ -61,6 +64,34 @@ expenses. Net income = Operating income + Other income.
 two decimals and a minus sign. Thousands separators and parentheses for negatives exist
 only in the HTML. An amount must be below 10^15, which keeps every sum far below the 28
 digits at which Decimal would round.
+
+## Currency
+
+The ledger is in US dollars. A statement can be shown in euros or pounds, at one rate for the
+whole range. It is a restatement for the reader, not accounting for exchange differences,
+and the one feature beyond the brief.
+
+- **Rate.** What one dollar is worth in the other currency, so amounts are multiplied by it.
+  Defaults: 0.9 for EUR, 0.7 for GBP. A typed rate replaces the default. It must be above 0
+  and below 1,000,000, with at most 6 decimal places. The currencies and their defaults are
+  one list, `CURRENCIES` in `currency.py`.
+- **Each account line is converted once**, rounded half up to the cent. Every subtotal and
+  result is then added up from the converted lines. A statement that does not add up reads
+  as wrong: with every figure converted on its own, Q1 at 0.9 shows a gross profit of
+  21,219.98 under 34,065.45 − 12,845.48, which is 21,219.97.
+- **The price**: converted net income can differ by a few cents from recorded net income
+  times the rate.
+- **The control total, the check table, the detail and the warnings are never converted.**
+  They stay in the ledger's currency and say so. The control total runs first, on the
+  amounts as recorded. Converted line by line, the balance-sheet accounts would no longer add
+  up to net income to the cent.
+- **Exact arithmetic.** An amount times a rate is worked out with 50 digits, then rounded
+  once. A result of `-0.00` becomes `0.00`.
+- **No conversion is the default.** Without a currency, or with the ledger's own, the
+  statement is returned as built. A rate sent with the ledger's own currency is an error,
+  not ignored. A ledger that is not in USD is never converted: the rates are per dollar.
+- **No JavaScript.** A blank rate means the default, which each option in the list states.
+  A typed rate stays in the box when the currency is changed.
 
 ## Bad data
 
@@ -128,6 +159,9 @@ Q1 2026 (2026-01-01 to 2026-03-31), worked out by hand from `ledger.json`:
 | Net income | (44,480.14) |
 
 Net income by month: January (21,529.65), February (13,230.25), March (9,720.24).
+
+Q1 2026 converted, worked out by hand from the lines: net income is (40,032.13) in EUR at
+0.9 and (31,136.10) in GBP at 0.7.
 
 ## Tests
 

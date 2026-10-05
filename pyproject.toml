@@ -27,7 +27,7 @@ src = [".", "tests"]
 select = ["E", "W", "F", "I", "B", "UP"]
 
 [tool.mypy]
-files = ["checks.py", "ledger.py", "statement.py", "app.py"]
+files = ["checks.py", "ledger.py", "statement.py", "currency.py", "app.py"]
 disallow_untyped_defs = true
 check_untyped_defs = true
 warn_unused_ignores = true

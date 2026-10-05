@@ -12,6 +12,7 @@ from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
 from checks import parse_date, problem
+from currency import BASE_CURRENCY, CURRENCIES, convert_statement, parse_rate
 from ledger import Ledger, LedgerError, load_ledger
 from statement import ControlTotalError, IncomeStatement, Section, income_statement, posted_date_span
 
@@ -68,6 +69,58 @@ def parse_range(args: Mapping[str, str]) -> tuple[date | None, date | None, list
     return dates.get("start"), dates.get("end"), errors
 
 
+def parse_currency(args: Mapping[str, str], ledger_currency: str) -> tuple[str, Decimal, list[dict]]:
+    """Read currency and rate from the query string. Returns (currency, rate, errors).
+
+    With no currency, or the ledger's own, nothing is converted and the rate is 1. With
+    another currency and no rate, the rate is that currency's default. When there are
+    errors, the currency and the rate are the ledger's own.
+    """
+    unconverted = Decimal("1")  # the rate when nothing is converted
+    code = args.get("currency", "").strip()
+    rate_text = args.get("rate", "").strip()
+
+    if code in ("", ledger_currency):
+        if rate_text:
+            return ledger_currency, unconverted, [problem(
+                "invalid_rate",
+                f"{ledger_currency} is the ledger's own currency, so no rate applies. "
+                f"Leave the rate blank, or choose another currency.",
+                field="rate",
+            )]
+        return ledger_currency, unconverted, []
+
+    errors = []
+    default_rates = {choice.code: choice.default_rate for choice in CURRENCIES}
+    if ledger_currency != BASE_CURRENCY:
+        errors.append(problem(
+            "invalid_currency",
+            f"The ledger is in {ledger_currency}. The rates are per {BASE_CURRENCY}, so it cannot be converted.",
+            field="currency",
+        ))
+    elif code not in default_rates:
+        errors.append(problem(
+            "invalid_currency",
+            f"The currency '{code}' is not available. Use one of: {', '.join([BASE_CURRENCY, *default_rates])}.",
+            field="currency",
+        ))
+
+    rate = default_rates.get(code)
+    if rate_text:
+        rate = parse_rate(rate_text)
+        if rate is None:
+            errors.append(problem(
+                "invalid_rate",
+                f"The rate '{rate_text}' is not a valid rate. Use a number above 0 and below 1,000,000 "
+                f"with at most 6 decimal places, such as 0.9.",
+                field="rate",
+            ))
+
+    if errors or rate is None:
+        return ledger_currency, unconverted, errors
+    return code, rate, []
+
+
 def section_json(section: Section) -> dict:
     return {
         "lines": [
@@ -82,6 +135,8 @@ def statement_json(statement: IncomeStatement) -> dict:
     return {
         "company": statement.company,
         "currency": statement.currency,
+        "ledger_currency": statement.ledger_currency,
+        "rate": str(statement.rate),
         "start": statement.start.isoformat(),
         "end": statement.end.isoformat(),
         "revenue": section_json(statement.revenue),
@@ -119,22 +174,32 @@ def create_app(ledger_path: str | Path | None = None) -> Flask:
 
     def statement_for_request(
         ledger: Ledger | None, ledger_errors: list[dict]
-    ) -> tuple[IncomeStatement | None, list[dict], int]:
-        """Returns (statement, errors, http_status) for the start and end in the query string."""
+    ) -> tuple[IncomeStatement | None, IncomeStatement | None, list[dict], int]:
+        """Returns (statement, recorded, errors, http_status) for the query string.
+
+        `recorded` is the statement in the ledger's currency. `statement` is the one to show:
+        the same one, or its conversion when the request asks for another currency.
+        """
         if ledger is None:
-            return None, ledger_errors, 500
+            return None, None, ledger_errors, 500
         start, end, errors = parse_range(request.args)
+        currency, rate, currency_errors = parse_currency(request.args, ledger.currency)
+        errors += currency_errors
         if errors or start is None or end is None:
-            return None, errors, 400
+            return None, None, errors, 400
         try:
-            return income_statement(ledger, start, end), [], 200
+            recorded = income_statement(ledger, start, end)
         except ControlTotalError as failure:
-            return None, [failure.error], 500
+            return None, None, [failure.error], 500
+        # The control total has passed on the amounts as recorded. Only then are they converted.
+        if currency == ledger.currency:
+            return recorded, recorded, [], 200
+        return convert_statement(recorded, currency, rate), recorded, [], 200
 
     @app.get("/income-statement")
     def income_statement_api() -> ResponseReturnValue:
         ledger, ledger_errors = read_ledger()
-        statement, errors, status = statement_for_request(ledger, ledger_errors)
+        statement, _recorded, errors, status = statement_for_request(ledger, ledger_errors)
         if statement is None:
             return {"errors": errors}, status
         return statement_json(statement)
@@ -142,24 +207,27 @@ def create_app(ledger_path: str | Path | None = None) -> Flask:
     @app.get("/")
     def income_statement_page() -> ResponseReturnValue:
         ledger, ledger_errors = read_ledger()
+        # What the form shows: the values of this request, and the currencies to choose from.
+        form = {
+            "start": request.args.get("start", ""),
+            "end": request.args.get("end", ""),
+            "currency": request.args.get("currency", ""),
+            "rate": request.args.get("rate", ""),
+            "currencies": CURRENCIES,
+            "ledger_currency": ledger.currency if ledger is not None else "",
+        }
 
         # With no query string this is a first visit. Go to the whole ledger, from its first
         # posted entry to its last. If nothing is posted yet, show only the form.
         if not request.args and ledger is not None:
             span = posted_date_span(ledger)
             if span is None:
-                return render_template("statement.html", statement=None, errors=[], start="", end="")
+                return render_template("statement.html", statement=None, recorded=None, errors=[], **form)
             first, last = span
             return redirect(url_for("income_statement_page", start=first.isoformat(), end=last.isoformat()))
 
-        statement, errors, status = statement_for_request(ledger, ledger_errors)
-        page = render_template(
-            "statement.html",
-            statement=statement,
-            errors=errors,
-            start=request.args.get("start", ""),
-            end=request.args.get("end", ""),
-        )
+        statement, recorded, errors, status = statement_for_request(ledger, ledger_errors)
+        page = render_template("statement.html", statement=statement, recorded=recorded, errors=errors, **form)
         return page, status
 
     @app.errorhandler(HTTPException)
